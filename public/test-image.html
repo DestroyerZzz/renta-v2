@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Supabase Image Test</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        line-height: 1.6;
+        margin: 0;
+        padding: 20px;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      .test-container {
+        margin-bottom: 30px;
+        border: 1px solid #ddd;
+        padding: 20px;
+        border-radius: 8px;
+      }
+      h1,
+      h2 {
+        color: #333;
+      }
+      .image-container {
+        margin: 20px 0;
+      }
+      img {
+        max-width: 100%;
+        height: auto;
+        border: 1px solid #eee;
+      }
+      input {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      button {
+        background: #4f46e5;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .error {
+        color: red;
+        margin-top: 10px;
+      }
+      .success {
+        color: green;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Supabase Image Loading Test</h1>
+    <p>
+      Use this page to test if your Supabase images are accessible outside of
+      your Next.js application.
+    </p>
+
+    <div class="test-container">
+      <h2>Test Direct Image URL</h2>
+      <input
+        type="text"
+        id="image-url"
+        placeholder="Paste your Supabase image URL here"
+      />
+      <button onclick="testDirectImage()">Test Image</button>
+      <div class="image-container" id="direct-image-result"></div>
+    </div>
+
+    <div class="test-container">
+      <h2>Bucket Permission Test</h2>
+      <p>Tests access to your Supabase bucket through its public URL</p>
+      <input
+        type="text"
+        id="bucket-name"
+        placeholder="Bucket name (e.g., 'avatars' or 'product_images')"
+        value="avatars"
+      />
+      <button onclick="testBucketAccess()">Test Bucket Access</button>
+      <div id="bucket-result"></div>
+    </div>
+
+    <script>
+      function testDirectImage() {
+        const url = document.getElementById("image-url").value.trim();
+        const resultContainer = document.getElementById("direct-image-result");
+
+        if (!url) {
+          resultContainer.innerHTML =
+            '<p class="error">Please enter an image URL</p>';
+          return;
+        }
+
+        resultContainer.innerHTML = `
+        <p>Loading image from: ${url}</p>
+        <img 
+          src="${url}" 
+          alt="Supabase test image"
+          onerror="handleImageError(this, '${url}')"
+          onload="handleImageSuccess(this)"
+        />
+        <div id="image-status"></div>
+      `;
+      }
+
+      function handleImageError(img, url) {
+        document.getElementById("image-status").innerHTML = `
+        <p class="error">Failed to load image!</p>
+        <p>This indicates either:</p>
+        <ul>
+          <li>The image doesn't exist at this URL</li>
+          <li>There's a CORS issue preventing access</li>
+          <li>The bucket permissions aren't set correctly</li>
+        </ul>
+        <p>Try opening the image URL directly in a new browser tab: <a href="${url}" target="_blank">Open image directly</a></p>
+      `;
+      }
+
+      function handleImageSuccess(img) {
+        document.getElementById("image-status").innerHTML = `
+        <p class="success">Image loaded successfully!</p>
+        <p>This means your Supabase storage is correctly configured for public access.</p>
+        <p>If it's not working in your Next.js app, the issue is likely with your Next.js Image configuration.</p>
+      `;
+      }
+
+      function testBucketAccess() {
+        const bucketName = document.getElementById("bucket-name").value.trim();
+        const resultContainer = document.getElementById("bucket-result");
+
+        if (!bucketName) {
+          resultContainer.innerHTML =
+            '<p class="error">Please enter a bucket name</p>';
+          return;
+        }
+
+        // Extract Supabase URL from the hostname of the current page
+        const currentUrl = window.location.hostname;
+        const supabaseBaseUrl = "jhsxcdnygnqpvqbephkz.supabase.co";
+
+        const bucketUrl = `https://${supabaseBaseUrl}/storage/v1/object/public/${bucketName}/`;
+
+        resultContainer.innerHTML = `
+        <p>Testing access to: <a href="${bucketUrl}" target="_blank">${bucketUrl}</a></p>
+        <p>Opening this URL in a new tab. If you see a directory listing or a JSON response (even an empty one), 
+        your bucket is accessible. If you get a 403 Forbidden error, there may be a permissions issue.</p>
+      `;
+
+        window.open(bucketUrl, "_blank");
+      }
+    </script>
+  </body>
+</html>
