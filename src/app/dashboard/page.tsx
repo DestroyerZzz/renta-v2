@@ -116,6 +116,17 @@ export default function DashboardPage() {
     }
   }
 
+  // Handler for image updates directly from ProductCard
+  const handleImageUpdate = (updatedProduct: Product) => {
+    if (updatedProduct.display_section === 'left') {
+      setLeftProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p))
+      setFilteredLeftProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p))
+    } else {
+      setRightProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p))
+      setFilteredRightProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p))
+    }
+  }
+
   const handleFormComplete = async () => {
     // Refresh products after form submission
     if (userId) {
@@ -271,6 +282,7 @@ export default function DashboardPage() {
                   onDelete={handleDeleteProduct}
                   onEdit={handleEditProduct}
                   onTagClick={handleTagClick}
+                  onImageUpdate={handleImageUpdate}
                 />
               ))
             ) : (
@@ -329,6 +341,7 @@ export default function DashboardPage() {
                   onDelete={handleDeleteProduct}
                   onEdit={handleEditProduct}
                   onTagClick={handleTagClick}
+                  onImageUpdate={handleImageUpdate}
                 />
               ))
             ) : (

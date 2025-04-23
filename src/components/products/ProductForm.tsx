@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/utils/supabase'
 import { Database } from '@/types/database'
 import { v4 as uuidv4 } from 'uuid'
 import SupabaseImage from '../ui/SupabaseImage'
 import ProductSuggestionBox, { SuggestionProductData } from '../suggestions/ProductSuggestionBox'
-import { Save, X, Lock, AlertCircle, Loader2 } from 'lucide-react'
+import { Save, X, AlertCircle, Loader2, RefreshCw, Lock, Info } from 'lucide-react'
 
 type Product = Database['public']['Tables']['products']['Row']
 type ProductInsert = Database['public']['Tables']['products']['Insert']
@@ -26,12 +26,17 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
   const [image, setImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [isTitleChecking, setIsTitleChecking] = useState(false)
+  const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [titleError, setTitleError] = useState<string | null>(null)
-  const [isSuggestionSelected, setIsSuggestionSelected] = useState(false)
-  const [isSuggestionImage, setIsSuggestionImage] = useState(false)
-  const [hasDuplicateTitle, setHasDuplicateTitle] = useState(false)
+  const [productFromDb, setProductFromDb] = useState<SuggestionProductData | null>(null)
+  const [lockedFields, setLockedFields] = useState({
+    tag: false,
+    image: false
+  })
+  
+  // Refs for input elements to control focus
+  const titleInputRef = useRef<HTMLInputElement>(null)
+  const descriptionInputRef = useRef<HTMLTextAreaElement>(null)
   
   const supabase = createClient()
   const isEditing = !!product
@@ -50,102 +55,105 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
-      setImage(file)
-      
-      // Create preview
-      const reader = new FileReader()
-      reader.onload = () => {
-        setImagePreview(reader.result as string)
+      // Only allow image changes if fields are not locked
+      if (!lockedFields.image) {
+        setImage(file)
+        
+        // Create preview
+        const reader = new FileReader()
+        reader.onload = () => {
+          setImagePreview(reader.result as string)
+        }
+        reader.readAsDataURL(file)
       }
-      reader.readAsDataURL(file)
     }
   }
 
-  const handleSuggestionSelect = (suggestion: SuggestionProductData) => {
-    setTitle(suggestion.title)
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTitle = e.target.value
+    setTitle(newTitle)
     
-    if (suggestion.description) setDescription(suggestion.description)
-    if (suggestion.tag) setTag(suggestion.tag)
-    
-    // Set the image from the suggestion if available
-    if (suggestion.image_url) {
-      setImagePreview(suggestion.image_url)
-      setIsSuggestionImage(true)
+    // If title changes at all, clear the fields since we need an exact match
+    if (productFromDb) {
+      resetAutofilledData()
     }
-    
-    setTitleError(null) 
-    setHasDuplicateTitle(false)
-    setIsSuggestionSelected(true)
   }
   
-  // Simple function to check if title exists
-  const checkTitleExists = async (titleToCheck: string): Promise<boolean> => {
-    if (!titleToCheck || !titleToCheck.trim()) return false
+  const resetAutofilledData = () => {
+    // Don't clear fields when editing an existing product
+    if (isEditing) return
     
-    try {
-      // Don't count the current product being edited as a duplicate
-      let query = supabase
-        .from('products')
-        .select('id')
-        .ilike('title', titleToCheck.trim())
-      
-      if (isEditing && product?.id) {
-        query = query.neq('id', product.id)
+    // Only reset fields that were autofilled from database
+    if (productFromDb) {
+      // Clear description only if it matches the database value
+      if (description === productFromDb.description) {
+        setDescription('')
+      }
+      // Reset image if it was from the database
+      if (imagePreview === productFromDb.image_url) {
+        setImagePreview(null)
+        setImage(null)
+      }
+      // Reset tag if it was from the database
+      if (tag === productFromDb.tag) {
+        setTag('')
       }
       
-      const { data, error } = await query
+      // Unlock fields
+      setLockedFields({
+        tag: false,
+        image: false
+      })
       
-      if (error) throw error
-      
-      return !!(data && data.length > 0)
-    } catch (err) {
-      console.error('Error checking for duplicate titles:', err)
-      return false
+      // Clear the database product reference
+      setProductFromDb(null)
     }
   }
   
-  // Toggle suggestion lock state
-  const toggleSuggestionLock = async () => {
-    if (isSuggestionSelected) {
-      setIsSuggestionSelected(false)
-      setIsSuggestionImage(false)
-      
-      // Check if the title exists when unlocking
-      if (title.trim()) {
-        setIsTitleChecking(true)
-        const isDuplicate = await checkTitleExists(title)
-        setIsTitleChecking(false)
-        
-        if (isDuplicate) {
-          setTitleError('Продукт с таким названием уже существует')
-          setHasDuplicateTitle(true)
-        } else {
-          setTitleError(null)
-          setHasDuplicateTitle(false)
+  const handleMatchFound = (suggestionData: SuggestionProductData | null, isSearching: boolean) => {
+    setIsSearchingSuggestions(isSearching)
+    
+    if (!isSearching) {
+      // Clear any previous match if no suggestion data returned
+      if (!suggestionData) {
+        if (productFromDb) {
+          resetAutofilledData()
         }
+        return
       }
-    } else {
-      setIsSuggestionSelected(true)
+      
+      // If we have a suggestion and we're not in editing mode, autofill
+      if (suggestionData && !isEditing) {
+        // Store the database product for reference
+        setProductFromDb(suggestionData)
+        
+        // Auto-fill the fields
+        if (suggestionData.description) {
+          setDescription(suggestionData.description)
+        }
+        
+        if (suggestionData.tag) {
+          setTag(suggestionData.tag)
+        }
+        
+        if (suggestionData.image_url) {
+          setImagePreview(suggestionData.image_url)
+        }
+        
+        // If this suggestion is from the database, lock fields
+        if (suggestionData.isFromDatabase) {
+          setLockedFields({
+            tag: !!suggestionData.tag,
+            image: !!suggestionData.image_url
+          })
+        }
+        
+        // Removed auto-focus to description field
+      }
     }
   }
-  
-  // Validate title on blur
-  const handleTitleBlur = async () => {
-    if (isSuggestionSelected || !title.trim()) return
-    
-    setIsTitleChecking(true)
-    const isDuplicate = await checkTitleExists(title)
-    setIsTitleChecking(false)
-    
-    if (isDuplicate) {
-      setTitleError('Продукт с таким названием уже существует')
-      setHasDuplicateTitle(true)
-    } else {
-      setTitleError(null)
-      setHasDuplicateTitle(false)
-    }
-  }
-  
+
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -154,72 +162,53 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
       return
     }
     
-    // Prevent submission if there's already a title error
-    if (hasDuplicateTitle || titleError) {
-      setError('Продукт с таким названием уже существует. Пожалуйста, выберите другое название или используйте предложение из списка.')
-      return
-    }
-    
-    // Final validation before submission
-    setIsTitleChecking(true)
-    const isDuplicate = await checkTitleExists(title)
-    setIsTitleChecking(false)
-    
-    if (isDuplicate) {
-      setTitleError('Продукт с таким названием уже существует')
-      setHasDuplicateTitle(true)
-      setError('Продукт с таким названием уже существует. Пожалуйста, выберите другое название или используйте предложение из списка.')
-      return
-    }
-    
-    // If we got to this point, the title is not a duplicate
     setIsLoading(true)
     setError(null)
     
     try {
       let imageUrl = product?.image_url || null
       
-      // Handle image from suggestion
-      if (isSuggestionImage && imagePreview) {
-        imageUrl = imagePreview
-      }
-      // Handle image upload if there's a new image
-      else if (image) {
+      if (image) {
         const fileExt = image.name.split('.').pop()
-        const fileName = `${uuidv4()}.${fileExt}`
-        const filePath = `${userId}/${fileName}`
+        const fileName = `${userId}/${uuidv4()}.${fileExt}`
         
         const { error: uploadError } = await supabase.storage
           .from('product_images')
-          .upload(filePath, image)
+          .upload(fileName, image)
           
         if (uploadError) {
           throw new Error(`Error uploading image: ${uploadError.message}`)
         }
         
-        const { data } = supabase.storage.from('product_images').getPublicUrl(filePath)
+        const { data } = supabase.storage.from('product_images').getPublicUrl(fileName)
         imageUrl = data.publicUrl
         
-        // Delete old image if updating and there was a previous image
+        // Delete old image if updating
         if (isEditing && product?.image_url) {
-          const oldImagePath = new URL(product.image_url).pathname.split('/').pop()
+          const oldImagePath = product.image_url.split('/').pop()
           if (oldImagePath) {
-            await supabase.storage.from('product_images').remove([`${userId}/${oldImagePath}`])
+            try {
+              await supabase.storage.from('product_images').remove([`${userId}/${oldImagePath}`])
+            } catch (deleteError) {
+              // Log but don't fail if old image deletion fails
+              console.error('Error deleting old image:', deleteError)
+            }
           }
         }
+      } else if (imagePreview && imagePreview !== product?.image_url) {
+        imageUrl = imagePreview
       }
       
       const productData: ProductInsert = {
         user_id: userId,
-        title,
-        description,
-        tag,
+        title: title.trim(),
+        description: description.trim(),
+        tag: tag.trim(),
         image_url: imageUrl,
         display_section: section
       }
       
-      if (isEditing) {
-        // Update existing product
+      if (isEditing && product?.id) {
         const { error: updateError } = await supabase
           .from('products')
           .update(productData)
@@ -227,7 +216,6 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
           
         if (updateError) throw new Error(`Error updating product: ${updateError.message}`)
       } else {
-        // Insert new product
         const { error: insertError } = await supabase
           .from('products')
           .insert(productData)
@@ -252,8 +240,9 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
       </h2>
       
       {error && (
-        <div className="p-3 mb-4 text-sm text-red-600 bg-red-100 rounded-md">
-          {error}
+        <div className="p-3 mb-4 text-sm text-red-600 bg-red-100 rounded-md flex items-center gap-2">
+          <AlertCircle size={16} />
+          <span>{error}</span>
         </div>
       )}
       
@@ -264,55 +253,48 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
             <label htmlFor="title" className="block text-sm font-medium text-black">
               названия
             </label>
-            
-            {isSuggestionSelected && (
-              <button
-                type="button"
-                onClick={toggleSuggestionLock}
-                className="text-xs flex items-center gap-1 text-indigo-600 hover:text-indigo-800"
-              >
-                <Lock size={14} />
-                <span>Разблокировать поля</span>
-              </button>
+            {isSearchingSuggestions && (
+              <span className="text-xs text-indigo-600 flex items-center gap-1">
+                <RefreshCw size={12} className="animate-spin" />
+                Поиск совпадений...
+              </span>
             )}
           </div>
           
-          <input
-            id="title"
-            type="text"
-            value={title}
-            onChange={(e) => {
-              if (!isSuggestionSelected) {
-                setTitle(e.target.value)
-              }
-            }}
-            onBlur={handleTitleBlur}
-            required
-            disabled={isSuggestionSelected}
-            className={`w-full text-black px-3 py-2 border ${titleError ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${
-              isSuggestionSelected ? 'bg-gray-100 cursor-not-allowed hover:cursor-not-allowed' : ''
-            }`}
-            placeholder="Введите названия продукта"
-          />
+          <div className="relative">
+            <input
+              id="title"
+              type="text"
+              value={title}
+              onChange={handleTitleChange}
+              required
+              ref={titleInputRef}
+              placeholder="Введите названия продукта"
+              className={`w-full text-black px-3 py-2 border ${
+                productFromDb ? 'border-indigo-300' : 'border-gray-300'
+              } rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${
+                isSearchingSuggestions ? 'bg-gray-50' : ''
+              }`}
+            />
+            
+            {isSearchingSuggestions && (
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                <Loader2 size={16} className="text-gray-400 animate-spin" />
+              </div>
+            )}
+          </div>
           
-          {titleError && (
-            <div className="mt-1 text-sm text-red-600 flex items-center gap-1">
-              <AlertCircle size={14} />
-              <span>{titleError}</span>
-            </div>
-          )}
-
-          {isTitleChecking && (
-            <div className="mt-1 text-sm text-gray-500 flex items-center gap-1">
-              <Loader2 size={14} className="animate-spin" />
-              <span>Проверка названия...</span>
+          {productFromDb && (
+            <div className="mt-1 text-xs text-indigo-600 flex items-center gap-1">
+              <Info size={12} />
+              <span>автоматически заполнена</span>
             </div>
           )}
           
-          {!isEditing && !isSuggestionSelected && (
+          {!isEditing && (
             <ProductSuggestionBox 
               inputValue={title} 
-              onSelectSuggestion={handleSuggestionSelect}
+              onFindMatch={handleMatchFound}
               excludeUserId={userId}
             />
           )}
@@ -326,7 +308,10 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
           <textarea
             id="description"
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            ref={descriptionInputRef}
+            onChange={(e) => {
+              setDescription(e.target.value)
+            }}
             rows={3}
             className="w-full text-black px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             placeholder="Опишите ваш продукт"
@@ -335,43 +320,48 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
         
         {/* Tag section */}
         <div className="mb-6">
-          <label htmlFor="tag" className="block text-sm font-medium text-black mb-1">
-            теги
+          <label htmlFor="tag" className="block text-sm font-medium text-black mb-1 flex items-center gap-2">
+            <span>теги</span>
+            {lockedFields.tag && (
+              <Lock size={14} className="text-indigo-500" />
+            )}
           </label>
           <input
             id="tag"
             type="text"
             value={tag}
             onChange={(e) => {
-              if (!isSuggestionSelected) {
+              if (!lockedFields.tag) {
                 setTag(e.target.value)
               }
             }}
-            disabled={isSuggestionSelected}
-            className={`w-full text-black px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${
-              isSuggestionSelected ? 'bg-gray-100 cursor-not-allowed hover:cursor-not-allowed' : ''
+            disabled={lockedFields.tag}
+            className={`w-full text-black px-3 py-2 border ${
+              lockedFields.tag ? 'bg-gray-50 border-indigo-200 cursor-not-allowed' : 'border-gray-300'
+            } rounded-md shadow-sm focus:outline-none ${
+              !lockedFields.tag ? 'focus:ring-indigo-500 focus:border-indigo-500' : ''
             }`}
             placeholder="Добавить тег (необязательно)"
           />
+          {lockedFields.tag && (
+            <p className="mt-1 text-xs text-gray-500">
+              автоматически заполнена
+            </p>
+          )}
         </div>
         
         {/* Image section */}
         <div className="mb-4 relative">
-          <div className="flex justify-between items-center mb-1">
-            <label htmlFor="product-image" className="block text-sm font-medium text-gray-700">
-              Изображение продукта
-            </label>
-            {isSuggestionImage && (
-              <div className="text-xs text-indigo-600">
-                <span className="flex items-center gap-1">
-                  <Lock size={14} />
-                  Изображение из каталога
-                </span>
-              </div>
+          <label htmlFor="product-image" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+            <span>Изображение продукта</span>
+            {lockedFields.image && (
+              <Lock size={14} className="text-indigo-500"  />
             )}
-          </div>
+          </label>
           {imagePreview && (
-            <div className="relative h-48 mb-2 border rounded-md overflow-hidden">
+            <div className={`relative h-48 mb-2 border rounded-md overflow-hidden ${
+              lockedFields.image ? 'border-indigo-200' : 'border-gray-300'
+            }`}>
               <SupabaseImage
                 src={imagePreview}
                 alt="Product preview"
@@ -383,6 +373,13 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
                   </div>
                 }
               />
+              {productFromDb && productFromDb.image_url === imagePreview && (
+                <div className="absolute top-2 right-2">
+                  <span className="bg-indigo-100 text-indigo-600 text-xs px-2 py-1 rounded-md">
+                    Из базы данных
+                  </span>
+                </div>
+              )}
             </div>
           )}
           <input
@@ -390,12 +387,19 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
             type="file"
             accept="image/*"
             onChange={handleImageChange}
+            disabled={lockedFields.image}
             aria-label="Выберите изображение продукта"
-            disabled={isSuggestionImage}
-            className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 ${
-              isSuggestionImage ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+            className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium ${
+              lockedFields.image 
+              ? 'file:bg-gray-100 file:text-gray-400 cursor-not-allowed opacity-75' 
+              : 'file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 cursor-pointer'
             }`}
           />
+          {lockedFields.image && (
+            <p className="mt-1 text-xs text-gray-500">
+              автоматически заполнена
+            </p>
+          )}
         </div>
         
         {/* Button section */}
@@ -410,7 +414,7 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
           </button>
           <button
             type="submit"
-            disabled={isLoading || hasDuplicateTitle || !!titleError || isTitleChecking}
+            disabled={isLoading || isSearchingSuggestions}
             className="cursor-pointer px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 flex items-center space-x-2"
           >
             {isLoading ? (

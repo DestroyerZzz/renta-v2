@@ -1,160 +1,136 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import{  useEffect, useRef } from 'react'
 import { createClient } from '@/utils/supabase'
 
-/**
- * Type for suggestion product data
- */
 export type SuggestionProductData = {
   title: string
   description: string | null
   tag: string | null
   image_url: string | null
   count: number
+  isFromDatabase: boolean
 }
 
-/**
- * Props for the product suggestion box component
- */
 export type ProductSuggestionBoxProps = {
   inputValue: string
-  onSelectSuggestion: (product: SuggestionProductData) => void
+  onFindMatch: (product: SuggestionProductData | null, isSearching: boolean) => void
   className?: string
   excludeUserId?: string
 }
 
-/**
- * ProductSuggestionBox component displays suggestions for products
- * as the user types in the product title field
- */
+// Debounce delay in ms - how long to wait after user stops typing
+const DEBOUNCE_DELAY = 500
+// Minimum input length to trigger a search
+const MIN_SEARCH_LENGTH = 3
+
 const ProductSuggestionBox = (props: ProductSuggestionBoxProps) => {
-  const { inputValue, onSelectSuggestion, className = '', excludeUserId } = props
-  const [suggestions, setSuggestions] = useState<SuggestionProductData[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const supabase = createClient()
-  const suggestionsRef = useRef<HTMLDivElement>(null)
+  const { inputValue, onFindMatch, excludeUserId } = props
+  // Remove unused state variables to fix linting errors
+  const lastSearchRef = useRef<string>('')
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    const fetchSuggestions = async () => {
-      if (!inputValue || inputValue.length < 2) {
-        setSuggestions([])
+    // Cleanup function to abort any ongoing search
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const fetchMatchingProduct = async () => {
+      // Clear match if input is cleared
+      if (!inputValue || inputValue.length < MIN_SEARCH_LENGTH) {
+        if (lastSearchRef.current) {
+          lastSearchRef.current = ''
+          onFindMatch(null, false)
+        }
+        return
+      }
+      
+      const normalizedInput = inputValue.trim().toLowerCase()
+      
+      // Skip search if input hasn't changed since last search
+      if (normalizedInput === lastSearchRef.current) {
         return
       }
 
-      setIsLoading(true)
-      setError(null)
+      // Abort previous search if exists
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+      abortControllerRef.current = new AbortController()
+
+      lastSearchRef.current = normalizedInput
+      // Set searching state through callback
+      onFindMatch(null, true) // Indicate search is starting
 
       try {
-        // Search for products with similar titles
-        const { data, error } = await supabase
+        const supabase = createClient()
+        // Search ONLY for exact title matches
+        const { data: exactMatches, error: exactError } = await supabase
           .from('products')
           .select('title, description, tag, image_url')
-          .ilike('title', `%${inputValue}%`)
-          .limit(5)
+          .eq('title', inputValue.trim()) // Use exact match with eq instead of ilike
+          .limit(1)
 
-        if (error) throw error
+        if (exactError) throw exactError
 
-        if (data && data.length > 0) {
-          // Group similar products and count occurrences
-          const productMap = new Map<string, SuggestionProductData>()
-          
-          data.forEach((product) => {
-            const key = `${product.title?.toLowerCase() || ''}`
-            
-            if (!productMap.has(key)) {
-              productMap.set(key, {
-                title: product.title || '',
-                description: product.description,
-                tag: product.tag,
-                image_url: product.image_url,
-                count: 1
-              })
-            } else {
-              const existing = productMap.get(key)!
-              productMap.set(key, {
-                ...existing,
-                count: existing.count + 1
-              })
-            }
-          })
-          
-          // Convert map to array and sort by count (most used first)
-          const suggestionsList = Array.from(productMap.values())
-            .sort((a, b) => b.count - a.count)
-            
-          setSuggestions(suggestionsList)
+        // If we found an exact match, use it
+        if (exactMatches && exactMatches.length > 0) {
+          const match = exactMatches[0]
+          onFindMatch({
+            title: match.title || '',
+            description: match.description,
+            tag: match.tag,
+            image_url: match.image_url,
+            count: 1,
+            isFromDatabase: true
+          }, false)
         } else {
-          setSuggestions([])
+          // No exact match found, clear any previous matches
+          onFindMatch(null, false)
         }
       } catch (err) {
-        console.error('Error fetching product suggestions:', err)
-        setError('Failed to load suggestions')
-        setSuggestions([])
-      } finally {
-        setIsLoading(false)
+        if (err instanceof Error && err.name === 'AbortError') {
+          return // Search was cancelled, do nothing
+        }
+        console.error('Error fetching product match:', err)
+        // Signal error through callback instead of storing in state
+        onFindMatch(null, false)
       }
     }
 
-    const debounceTimer = setTimeout(fetchSuggestions, 300)
-    return () => clearTimeout(debounceTimer)
-  }, [inputValue, supabase, excludeUserId])
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
 
-  // Close suggestions when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
-        setSuggestions([])
+    // Only start a new search after the user stops typing for DEBOUNCE_DELAY ms
+    // Don't even set the timeout if input is too short
+    if (inputValue.length >= MIN_SEARCH_LENGTH) {
+      searchTimeoutRef.current = setTimeout(fetchMatchingProduct, DEBOUNCE_DELAY)
+    } else if (!inputValue || inputValue.length === 0) {
+      // Clear matches immediately when input is cleared
+      lastSearchRef.current = ''
+      onFindMatch(null, false)
+    }
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
       }
     }
-    
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  }, [inputValue, excludeUserId, onFindMatch])
 
-  if (suggestions.length === 0 && !isLoading) {
-    return null
-  }
-
-  return (
-    <div 
-      ref={suggestionsRef}
-      className={`absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg ${className}`}
-    >
-      {isLoading ? (
-        <div className="p-2 text-sm text-gray-500 animate-pulse">
-          Загрузка предложений...
-        </div>
-      ) : error ? (
-        <div className="p-2 text-sm text-red-500">
-          {error}
-        </div>
-      ) : (
-        <ul className="max-h-60 overflow-auto">
-          {suggestions.map((product, index) => (
-            <li 
-              key={`${product.title}-${index}`}
-              onClick={() => onSelectSuggestion(product)}
-              className="cursor-pointer p-2 hover:bg-gray-100 border-b last:border-b-0 text-black"
-            >
-              <div className="font-medium">{product.title}</div>
-              {product.tag && (
-                <div className="text-xs text-indigo-600 mt-1">#{product.tag}</div>
-              )}
-              {product.description && (
-                <div className="text-xs text-gray-500 truncate mt-1">{product.description}</div>
-              )}
-              {product.image_url && (
-                <div className="text-xs text-green-600 mt-1">С изображением</div>
-              )}
-              <div className="text-xs text-gray-400 mt-1">Использовано {product.count} раз</div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
+  // No visible UI - this component just handles the auto-fill logic
+  return null
 }
 
 export default ProductSuggestionBox

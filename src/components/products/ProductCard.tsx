@@ -5,7 +5,7 @@ import { createClient } from '@/utils/supabase'
 import { Database } from '@/types/database'
 import SupabaseImage from '../ui/SupabaseImage'
 import ConfirmationDialog from '../ui/ConfirmationDialog'
-import { Edit, Trash2, Tag, Upload } from 'lucide-react'
+import { Edit, Trash2, Tag, Upload, Loader2 } from 'lucide-react'
 
 type Product = Database['public']['Tables']['products']['Row']
 
@@ -14,19 +14,30 @@ interface ProductCardProps {
   onDelete: (id: string) => void
   onEdit: (product: Product) => void
   onTagClick?: (tag: string) => void
+  onImageUpdate?: (product: Product) => void // New optional prop for handling image updates
 }
 
 export const DEFAULT_TAG = 'разное'
 const MAX_DESCRIPTION_LENGTH = 50
 
-export default function ProductCard({ product, onEdit, onDelete, onTagClick }: ProductCardProps) {
+export default function ProductCard({ 
+  product, 
+  onEdit, 
+  onDelete, 
+  onTagClick,
+  onImageUpdate // New prop with default to onEdit for backward compatibility
+}: ProductCardProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [showFullDescription, setShowFullDescription] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isImageLoaded, setIsImageLoaded] = useState(false)
   const [isAuthor, setIsAuthor] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const supabase = createClient()
+  
+  // Use onImageUpdate if provided, otherwise fall back to onEdit
+  const handleImageChange = onImageUpdate || onEdit;
   
   useEffect(() => {
     if (product.image_url) {
@@ -77,6 +88,8 @@ export default function ProductCard({ product, onEdit, onDelete, onTagClick }: P
     if (!file) return;
     
     setIsUploading(true);
+    setUploadProgress(0);
+    
     try {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
@@ -91,16 +104,29 @@ export default function ProductCard({ product, onEdit, onDelete, onTagClick }: P
       console.log('Attempting to upload with path:', fileName);
       console.log('Current user ID:', user.id);
       
+      // Simulate upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return prev;
+          }
+          return prev + 10;
+        });
+      }, 200);
+      
       const { error: uploadError, data: uploadData } = await supabase.storage
         .from('product_images')
         .upload(fileName, file);
         
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+      
       if (uploadError) {
         console.error('Upload error details:', uploadError);
         throw new Error(`Upload error: ${uploadError.message}`);
       }
       
-      // Rest of function remains the same
       if (!uploadData) {
         throw new Error('Upload failed: No data returned');
       }
@@ -125,17 +151,23 @@ export default function ProductCard({ product, onEdit, onDelete, onTagClick }: P
         throw new Error(`Update error: ${updateError.message}`);
       }
       
-      // Update the product in the UI by calling onEdit with updated product
-      onEdit({
+      // Update the product in the UI by calling handleImageChange with updated product
+      const updatedProduct = {
         ...product,
         image_url: urlData.publicUrl
-      });
+      };
+      
+      // Call the appropriate handler
+      handleImageChange(updatedProduct);
       
     } catch (error) {
       console.error('Error uploading image:', error);
       alert('Ошибка при загрузке изображения: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка'));
     } finally {
-      setIsUploading(false);
+      setTimeout(() => {
+        setIsUploading(false);
+        setUploadProgress(0);
+      }, 500); // Add small delay to show 100% completion
     }
   }
 
@@ -159,40 +191,60 @@ export default function ProductCard({ product, onEdit, onDelete, onTagClick }: P
         <div className="flex items-center justify-center w-[100px] h-[100px] sm:w-[130px] sm:h-[130px] md:w-[150px] md:h-[150px] flex-shrink-0 p-2">
           <div className="relative w-full h-full border border-gray-200 rounded-md overflow-hidden bg-white group-hover:border-indigo-200 transition-colors duration-300">
             {product.image_url ? (
-              <SupabaseImage 
-                src={product.image_url} 
-                alt={product.title || description.substring(0, 30) || 'Изображение продукта'} 
-                className={`w-full h-full object-cover transition-all duration-500 ${
-                  isImageLoaded ? 'opacity-100' : 'opacity-0'
-                }`}
-                fill={true}
-                fallback={
-                  <div className="w-full h-full flex items-center justify-center bg-gray-100 animate-pulse">
-                    <p className="text-gray-500 text-xs sm:text-sm">Ошибка загрузки</p>
-                  </div>
-                }
-              />
+              <div className="w-full h-full relative">
+                <SupabaseImage 
+                  src={product.image_url} 
+                  alt={product.title || description.substring(0, 30) || 'Изображение продукта'} 
+                  className={`w-full h-full object-cover transition-all duration-500 ${
+                    isImageLoaded ? 'opacity-100' : 'opacity-0'
+                  }`}
+                  fill={true}
+                  fallback={
+                    <div className="w-full h-full flex items-center justify-center bg-gray-100 animate-pulse">
+                      <p className="text-gray-500 text-xs sm:text-sm">Ошибка загрузки</p>
+                    </div>
+                  }
+                />
+                {/* No hover overlay for products with images */}
+              </div>
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-gray-100 transition-colors duration-300 group-hover:bg-gray-50">
                 {isAuthor ? (
                   <div className="flex flex-col items-center justify-center w-full h-full">
-                    <label 
-                      htmlFor={`image-upload-${product.id}`}
-                      className={`cursor-pointer flex flex-col items-center justify-center w-full h-full ${isUploading ? 'pointer-events-none' : ''}`}
-                    >
-                      <Upload size={20} className="text-indigo-500 mb-1" />
-                      <p className="text-gray-500 text-xs sm:text-sm group-hover:text-indigo-500 transition-colors duration-300">
-                        {isUploading ? 'Загрузка...' : 'Добавить фото'}
-                      </p>
-                      <input 
-                        id={`image-upload-${product.id}`}
-                        type="file" 
-                        accept="image/*" 
-                        onChange={handleImageUpload}
-                        disabled={isUploading}
-                        className="hidden"
-                      />
-                    </label>
+                    {isUploading ? (
+                      <div className="flex flex-col items-center justify-center w-full h-full">
+                        <Loader2 size={24} className="text-indigo-500 mb-1 animate-spin" />
+                        <p className="text-gray-500 text-xs sm:text-sm text-center">
+                          Загрузка... {uploadProgress}%
+                        </p>
+                        {uploadProgress > 0 && (
+                          <div className="w-4/5 mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-indigo-500 transition-all duration-200" 
+                              style={{ width: `${uploadProgress}%` }} 
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <label 
+                        htmlFor={`image-upload-${product.id}`}
+                        className="cursor-pointer flex flex-col items-center justify-center w-full h-full"
+                      >
+                        <Upload size={20} className="text-indigo-500 mb-1" />
+                        <p className="text-gray-500 text-xs sm:text-sm group-hover:text-indigo-500 transition-colors duration-300">
+                          Добавить фото
+                        </p>
+                        <input 
+                          id={`image-upload-${product.id}`}
+                          type="file" 
+                          accept="image/*" 
+                          onChange={handleImageUpload}
+                          disabled={isUploading}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
                   </div>
                 ) : (
                   <p className="text-gray-500 text-xs sm:text-sm group-hover:text-indigo-500 transition-colors duration-300">Нет изображения</p>
