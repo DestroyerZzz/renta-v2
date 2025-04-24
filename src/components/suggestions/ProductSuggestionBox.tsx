@@ -73,18 +73,19 @@ const ProductSuggestionBox = (props: ProductSuggestionBoxProps) => {
 
       try {
         const supabase = createClient()
-        // Search ONLY for exact title matches
-        const { data: exactMatches, error: exactError } = await supabase
+        
+        // Use case-insensitive search with ilike instead of exact match
+        const { data: matches, error: matchError } = await supabase
           .from('products')
           .select('title, description, tag, image_url')
-          .eq('title', inputValue.trim()) // Use exact match with eq instead of ilike
+          .ilike('title', inputValue.trim()) // Case-insensitive search
           .limit(1)
 
-        if (exactError) throw exactError
+        if (matchError) throw matchError
 
-        // If we found an exact match, use it
-        if (exactMatches && exactMatches.length > 0) {
-          const match = exactMatches[0]
+        // If we found a match, use it
+        if (matches && matches.length > 0) {
+          const match = matches[0]
           onFindMatch({
             title: match.title || '',
             description: match.description,
@@ -94,7 +95,7 @@ const ProductSuggestionBox = (props: ProductSuggestionBoxProps) => {
             isFromDatabase: true
           }, false)
         } else {
-          // No exact match found, clear any previous matches
+          // No match found, clear any previous matches
           onFindMatch(null, false)
         }
       } catch (err) {

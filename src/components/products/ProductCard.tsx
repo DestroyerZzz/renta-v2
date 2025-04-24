@@ -171,13 +171,18 @@ export default function ProductCard({
     }
   }
 
-  const getDisplayTag = () => product.tag || DEFAULT_TAG
+  const getDisplayTag = () => {
+    const tag = product.tag || DEFAULT_TAG;
+    // If tag already starts with #, don't add another one
+    return tag.startsWith('#') ? tag.substring(1) : tag;
+  }
 
   const handleTagClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (onTagClick) {
-      onTagClick(getDisplayTag());
+      // Always pass the original tag to the handler
+      onTagClick(product.tag || DEFAULT_TAG);
     }
   };
 

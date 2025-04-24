@@ -6,7 +6,10 @@ import { Database } from '@/types/database'
 import { v4 as uuidv4 } from 'uuid'
 import SupabaseImage from '../ui/SupabaseImage'
 import ProductSuggestionBox, { SuggestionProductData } from '../suggestions/ProductSuggestionBox'
-import { Save, X, AlertCircle, Loader2, RefreshCw, Lock, Info } from 'lucide-react'
+import { Save, X, AlertCircle, Loader2, RefreshCw, Lock, Info, Hash, Trash2 } from 'lucide-react'
+import { DEFAULT_TAG } from './ProductCard'
+import { toast } from 'react-hot-toast'
+import ConfirmationDialog from '../ui/ConfirmationDialog'
 
 type Product = Database['public']['Tables']['products']['Row']
 type ProductInsert = Database['public']['Tables']['products']['Insert']
@@ -23,6 +26,7 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [tag, setTag] = useState('')
+  const [tagWithoutHash, setTagWithoutHash] = useState('') // Store tag without hash for display
   const [image, setImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -33,6 +37,11 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
     tag: false,
     image: false
   })
+  
+  // States for product deletion functionality
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [duplicateProduct, setDuplicateProduct] = useState<Product | null>(null)
   
   // Refs for input elements to control focus
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -45,12 +54,33 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
     if (product) {
       setTitle(product.title || '')
       setDescription(product.description || '')
-      setTag(product.tag || '')
+      
+      // Handle tag with or without hash symbol
+      if (product.tag) {
+        setTag(product.tag)
+        setTagWithoutHash(product.tag.startsWith('#') ? product.tag.substring(1) : product.tag)
+      }
+      
       if (product.image_url) {
         setImagePreview(product.image_url)
       }
     }
   }, [product])
+
+  // Handle tag changes - strip # if user adds it
+  const handleTagChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!lockedFields.tag) {
+      const value = e.target.value
+      
+      // Remove # symbol if user types it
+      const cleanTag = value.startsWith('#') ? value.substring(1) : value
+      setTagWithoutHash(cleanTag)
+      
+      // Store the tag value - we'll add the # only during submission
+      // Don't add # here to prevent duplicates
+      setTag(cleanTag)
+    }
+  }
   
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -97,6 +127,7 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
       // Reset tag if it was from the database
       if (tag === productFromDb.tag) {
         setTag('')
+        setTagWithoutHash('')
       }
       
       // Unlock fields
@@ -107,6 +138,36 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
       
       // Clear the database product reference
       setProductFromDb(null)
+    }
+  }
+  
+  // Check if product exists in the other display section
+  const checkProductExistsInOtherSection = async (productTitle: string): Promise<{ exists: boolean, product?: Product }> => {
+    // Determine which section to check
+    const otherSection = section === 'left' ? 'right' : 'left'
+    
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')  // Select all fields to get complete product data
+        .eq('user_id', userId)
+        .eq('display_section', otherSection)
+        .ilike('title', productTitle.trim())
+        .limit(1)
+        
+      if (error) {
+        throw error
+      }
+      
+      // If we found a product with the same title in the other section
+      return { 
+        exists: data && data.length > 0,
+        product: data && data.length > 0 ? data[0] : undefined
+      }
+    } catch (err) {
+      console.error('Error checking for duplicate products:', err)
+      // In case of error, allow submission (fail safe)
+      return { exists: false }
     }
   }
   
@@ -134,6 +195,8 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
         
         if (suggestionData.tag) {
           setTag(suggestionData.tag)
+          // Handle tag with or without hash for display
+          setTagWithoutHash(suggestionData.tag.startsWith('#') ? suggestionData.tag.substring(1) : suggestionData.tag)
         }
         
         if (suggestionData.image_url) {
@@ -153,6 +216,58 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
     }
   }
 
+  // Handle showing the delete confirmation dialog for a duplicate product
+  const handleDeleteClick = (product: Product) => {
+    setDuplicateProduct(product)
+    setShowDeleteConfirm(true)
+    // Dismiss any active toasts when showing the confirmation dialog
+    toast.dismiss()
+  }
+  
+  // Handle confirming product deletion
+  const handleDeleteConfirm = async () => {
+    if (!duplicateProduct) return
+    
+    setIsDeleting(true)
+    try {
+      // Delete the product image if it exists
+      if (duplicateProduct.image_url) {
+        const imagePath = duplicateProduct.image_url.split('/').pop()
+        if (imagePath) {
+          try {
+            await supabase.storage
+              .from('product_images')
+              .remove([`${userId}/${imagePath}`])
+          } catch (error) {
+            console.error('Error deleting product image:', error)
+            // Continue with product deletion even if image deletion fails
+          }
+        }
+      }
+      
+      // Delete the product from the database
+      const { error: deleteError } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', duplicateProduct.id)
+      
+      if (deleteError) throw deleteError
+      
+      // Show success notification
+      toast.success('Продукт успешно удален')
+      
+      // Refresh form to continue adding the new product
+      setIsLoading(false)
+    } catch (error) {
+      console.error('Error deleting product:', error)
+      toast.error('Ошибка при удалении продукта')
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteConfirm(false)
+      setDuplicateProduct(null)
+    }
+  }
+
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -166,6 +281,58 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
     setError(null)
     
     try {
+      // Skip duplicate check when editing existing product
+      if (!isEditing) {
+        // Check if the same product exists in the other display section
+        const { exists, product: duplicated } = await checkProductExistsInOtherSection(title)
+        if (exists && duplicated) {
+          const otherSectionName = section === 'left' ? 'правом' : 'левом'
+          
+          // Create a custom toast with a delete button
+          toast.custom((t) => (
+            <div 
+              className={`${
+                t.visible ? 'animate-enter' : 'animate-leave'
+              } max-w-md w-full bg-red-50 shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}
+            >
+              <div className="flex-1 w-0 p-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 pt-0.5">
+                    <AlertCircle className="h-6 w-6 text-red-500" />
+                  </div>
+                  <div className="ml-3 flex-1">
+                    <p className="text-sm font-medium text-red-800">
+                      Дублирующийся продукт
+                    </p>
+                    <p className="mt-1 text-sm text-red-700">
+                      Этот продукт уже существует в {otherSectionName} дисплее. Удалите его перед добавлением сюда.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex border-l border-red-200">
+                <button
+                  onClick={() => {
+                    toast.dismiss(t.id);
+                    handleDeleteClick(duplicated);
+                  }}
+                  className="cursor-pointer w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-red-600 hover:text-red-500 hover:bg-red-100 transition-colors duration-150 focus:outline-none"
+                >
+                  <Trash2 className="h-5 w-5 mr-1" />
+                  Удалить
+                </button>
+              </div>
+            </div>
+          ), { 
+            duration: 5000, 
+            position: 'top-center',
+          });
+          
+          setIsLoading(false);
+          return;
+        }
+      }
+
       let imageUrl = product?.image_url || null
       
       if (image) {
@@ -199,11 +366,22 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
         imageUrl = imagePreview
       }
       
+      // Handle the tag properly to ensure exactly one # symbol
+      let finalTag = '';
+      if (tagWithoutHash && tagWithoutHash.trim()) {
+        // Remove any # at the beginning if present
+        const cleanTag = tagWithoutHash.trim().replace(/^#+/, '');
+        // Add a single # at the beginning
+        finalTag = cleanTag ? `#${cleanTag}` : '';
+      } else {
+        finalTag = DEFAULT_TAG;
+      }
+      
       const productData: ProductInsert = {
         user_id: userId,
         title: title.trim(),
         description: description.trim(),
-        tag: tag.trim(),
+        tag: finalTag,
         image_url: imageUrl,
         display_section: section
       }
@@ -323,26 +501,33 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
           <label htmlFor="tag" className="block text-sm font-medium text-black mb-1 flex items-center gap-2">
             <span>теги</span>
             {lockedFields.tag && (
-              <Lock size={14} className="text-indigo-500" />
+              <Lock size={14} className="text-indigo-500" aria-label="Это поле заблокировано, так как продукт из базы данных" />
             )}
           </label>
-          <input
-            id="tag"
-            type="text"
-            value={tag}
-            onChange={(e) => {
-              if (!lockedFields.tag) {
-                setTag(e.target.value)
-              }
-            }}
-            disabled={lockedFields.tag}
-            className={`w-full text-black px-3 py-2 border ${
-              lockedFields.tag ? 'bg-gray-50 border-indigo-200 cursor-not-allowed' : 'border-gray-300'
-            } rounded-md shadow-sm focus:outline-none ${
-              !lockedFields.tag ? 'focus:ring-indigo-500 focus:border-indigo-500' : ''
-            }`}
-            placeholder="Добавить тег (необязательно)"
-          />
+          <div className="relative">
+            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+              <Hash size={16} />
+            </div>
+            <input
+              id="tag"
+              type="text"
+              value={tagWithoutHash}
+              onChange={handleTagChange}
+              disabled={lockedFields.tag}
+              className={`w-full text-black pl-8 pr-3 py-2 border ${
+                lockedFields.tag ? 'bg-gray-50 border-indigo-200 cursor-not-allowed' : 'border-gray-300'
+              } rounded-md shadow-sm focus:outline-none ${
+                !lockedFields.tag ? 'focus:ring-indigo-500 focus:border-indigo-500' : ''
+              }`}
+              placeholder="Добавить тег (без символа #)"
+            />
+          </div>
+          {!lockedFields.tag && (
+            <p className="mt-1 text-xs text-indigo-600 flex items-center gap-1">
+              <Info size={12} />
+              <span>Символ # добавляется автоматически</span>
+            </p>
+          )}
           {lockedFields.tag && (
             <p className="mt-1 text-xs text-gray-500">
               автоматически заполнена
@@ -355,7 +540,7 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
           <label htmlFor="product-image" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
             <span>Изображение продукта</span>
             {lockedFields.image && (
-              <Lock size={14} className="text-indigo-500"  />
+              <Lock size={14} className="text-indigo-500" aria-label="Изображение заблокировано, так как продукт из базы данных" />
             )}
           </label>
           {imagePreview && (
@@ -431,6 +616,20 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
           </button>
         </div>
       </form>
+      
+      {/* Confirmation Dialog for Deletion */}
+      {showDeleteConfirm && duplicateProduct && (
+        <ConfirmationDialog
+          isOpen={showDeleteConfirm}
+          title="Удалить продукт"
+          message="Вы уверены, что хотите удалить этот продукт? Это действие нельзя отменить."
+          confirmText="Удалить"
+          cancelText="Отмена"
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          isLoading={isDeleting}
+        />
+      )}
     </div>
   )
 }
