@@ -6,15 +6,20 @@ import ProductCard, { DEFAULT_TAG } from '@/components/products/ProductCard'
 import ProductForm from '@/components/products/ProductForm'
 import { Database } from '@/types/database'
 import SupabaseImage from '@/components/ui/SupabaseImage'
-import { PlusCircle } from 'lucide-react'
+import { PlusCircle, Search } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import Image from 'next/image'
+// import Link from 'next/link'
 
 type Product = Database['public']['Tables']['products']['Row']
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [userId, setUserId] = useState<string | null>(null)
   const [userName, setUserName] = useState<string>('')
   const [userEmail, setUserEmail] = useState<string>('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null)
   const [leftProducts, setLeftProducts] = useState<Product[]>([])
   const [rightProducts, setRightProducts] = useState<Product[]>([])
   const [filteredLeftProducts, setFilteredLeftProducts] = useState<Product[]>([])
@@ -35,10 +40,10 @@ export default function DashboardPage() {
         setUserId(user.id)
         setUserEmail(user.email || '')
         
-        // Get user profile details (name, avatar)
+        // Get user profile details (name, avatar, cover image)
         const { data: profile } = await supabase
           .from('profiles')
-          .select('full_name, avatar_url')
+          .select('full_name, avatar_url, cover_image_url')
           .eq('id', user.id)
           .single()
         
@@ -46,6 +51,9 @@ export default function DashboardPage() {
           setUserName(profile.full_name || user.email?.split('@')[0] || 'Пользователь')
           if (profile.avatar_url) {
             setAvatarUrl(profile.avatar_url)
+          }
+          if (profile.cover_image_url) {
+            setCoverImageUrl(profile.cover_image_url)
           }
         } else {
           setUserName(user.email?.split('@')[0] || 'Пользователь')
@@ -175,182 +183,257 @@ export default function DashboardPage() {
 
   return (
     <div className="pb-10">
-      {/* Header area with title and filter */}
-      <div className="flex flex-col md:flex-row items-center justify-between mb-6">
-        {/* Search filter */}
-        <div className="w-full md:w-auto mb-4 md:mb-0">
-          <div className="relative max-w-md group">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <span className="text-gray-500 text-sm group-focus-within:text-indigo-500 transition-colors duration-200">#</span>
-            </div>
-            <input
-              type="text"
-              placeholder="Фильтровать по тегу..."
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value)}
-              className="block w-full pl-8 pr-4 py-3 border border-gray-300 rounded-md shadow-sm  focus:border-indigo-500 text-black transition-all duration-200 ease-in-out hover:border-indigo-300"
-            />
-            {tagFilter && (
-              <button
-                onClick={() => setTagFilter('')}
-                className="cursor-pointer absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors duration-200"
-                aria-label="Очистить фильтр"
-              >
-                <span className="text-xl transform hover:scale-110 transition-transform duration-200">&times;</span>
-              </button>
-            )}
-          </div>
-        </div>
+      {/* Full-width cover image with overlay */}
+      <div className="relative w-full h-64 rounded-lg">
+        {coverImageUrl ? (
+          <SupabaseImage 
+            src={coverImageUrl} 
+            alt="Profile Cover" 
+            className="w-full h-full object-cover rounded-lg"
+            fallback={
+              <div className="w-full h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg"></div>
+            }
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-r from-indigo-500 to-purple-600"></div>
+        )}
         
-        <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 text-center ">
-          <span className="sm:hidden">Продукты</span>
-          <span className="hidden sm:inline md:hidden">Управление продуктами</span>
-          <span className="hidden md:inline">Панель управления продуктами</span>
-        </h1>
+        {/* Black overlay with exactly 0.7 opacity */}
+        <div className="absolute inset-0 bg-black opacity-70 rounded-lg"></div>
+        
+        {/* Centered avatar and username */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <div className="relative w-24 h-24 rounded-full overflow-hidden bg-white p-1 shadow-lg mb-4">
+            {avatarUrl ? (
+              <SupabaseImage 
+                src={avatarUrl} 
+                alt="User Avatar" 
+                className="w-full h-full rounded-full object-cover"
+                fallback={
+                  <div className="w-full h-full flex items-center justify-center bg-indigo-200 text-indigo-600 text-2xl font-bold rounded-full animate-pulse">
+                    {userName?.charAt(0)?.toUpperCase() || 'U'}
+                  </div>
+                }
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-indigo-200 text-indigo-600 text-2xl font-bold rounded-full">
+                {userName?.charAt(0)?.toUpperCase() || 'U'}
+              </div>
+            )}
+          </div>
+          <h2 className="font-medium text-xl text-white">{userName}</h2>
+          <p className="text-sm text-gray-300 mt-1">{userEmail}</p>
+        </div>
       </div>
       
-      {/* User Profile Card */}
-      <div className="mb-8 max-w-md mx-auto bg-white rounded-lg shadow-lg p-5 flex items-center transform hover:scale-102 transition-all duration-300 hover:shadow-xl">
-        <div className="relative w-16 h-16 rounded-full overflow-hidden bg-indigo-100 mr-5 border-2 border-indigo-200 flex-shrink-0 ">
-          {avatarUrl ? (
-            <SupabaseImage 
-              src={avatarUrl} 
-              alt="User Avatar" 
-              className="w-full h-full object-cover transition-opacity duration-300 hover:opacity-90"
-              fallback={
-                <div className="w-full h-full flex items-center justify-center bg-indigo-200 text-indigo-600 text-xl font-bold animate-pulse">
-                  {userName?.charAt(0)?.toUpperCase() || 'U'}
+      {/* Navigation and filter section - moved immediately under the cover with no margin */}
+      <div className="container mx-auto px-4 bg-white shadow py-4 sticky top-0 z-10">
+        <div className="flex flex-col md:flex-row items-center justify-between">
+          {/* Left anchors */}
+          <div className="flex space-x-6 mb-4 md:mb-0">
+            <a 
+              href="/dashboard"
+              className="text-indigo-600 hover:text-indigo-800 transition-colors duration-200 font-medium"
+              // onClick={(e) => {
+              //   e.preventDefault();
+              //   router.push('/404');
+              // }}
+            >
+              Профиль
+            </a>
+            <a 
+              href="#"
+              className="text-gray-600 hover:text-indigo-600 transition-colors duration-200 font-medium"
+              onClick={(e) => {
+                e.preventDefault();
+                router.push('/404');
+              }}
+            >
+              Активность
+            </a>
+            <a 
+              href="/dashboard/profile"
+              className="text-gray-600 hover:text-indigo-600 transition-colors duration-200 font-medium"
+              // onClick={(e) => {
+              //   e.preventDefault();
+              //   router.push('/404');
+              // }}
+            >
+              Настройки
+            </a>
+          </div>
+          
+          {/* Right filter */}
+          <div className="w-full md:w-64">
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span className="text-gray-500 text-sm group-focus-within:text-indigo-500 transition-colors duration-200">#</span>
+              </div>
+              <input
+                type="text"
+                placeholder="Фильтровать по тегу..."
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
+                className="block w-full pl-8 pr-12 py-2 border border-gray-300 rounded-full shadow-sm focus:border-indigo-500 text-black transition-all duration-200 ease-in-out hover:border-indigo-300"
+              />
+              <div className="absolute inset-y-0 right-0 flex items-center">
+                {tagFilter ? (
+                  <button
+                    onClick={() => setTagFilter('')}
+                    className="pr-8 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  >
+                    <span className="text-xl">&times;</span>
+                  </button>
+                ) : null}
+                <div className="pr-3 text-gray-400">
+                  <Search size={18} className="mr-1" />
                 </div>
-              }
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-indigo-200 text-indigo-600 text-xl font-bold">
-              {userName?.charAt(0)?.toUpperCase() || 'U'}
+              </div>
             </div>
-          )}
-        </div>
-        <div>
-          <h2 className="font-medium text-lg text-gray-800">{userName}</h2>
-          <p className="text-sm text-gray-500">{userEmail}</p>
+          </div>
         </div>
       </div>
       
-      {/* Display sections container */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative opacity-0 animate-fadeIn">
-        {/* Left Display Section */}
-        <section className="bg-white p-6 rounded-lg shadow-lg transition-all duration-300 hover:shadow-xl">
-          <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-800">
-              <span className="sm:inline md:hidden lg:hidden">Левый</span>
-              <span className="hidden sm:hidden md:inline">Левый дисплей</span>
-            </h2>
-            <button
-              type="button"
-              onClick={() => {
-                setEditingProduct(undefined)
-                setShowLeftForm(true)
-              }}
-              className="cursor-pointer px-2 py-1 text-xs sm:text-sm text-white bg-[#2daa4f] rounded-md hover:bg-[#249c47] transition-colors duration-200 whitespace-nowrap transform hover:scale-105 transition-transform duration-300 flex items-center gap-1"
-            >
-              <PlusCircle size={16} />
-              <span className="sm:hidden">Продукт</span>
-              <span className="hidden sm:inline">Добавить продукт</span>
-            </button>
-          </div>
-
-          {showLeftForm && userId && (
-            <div className="mb-6 animate-slideDown">
-              <ProductForm
-                userId={userId}
-                product={editingProduct?.display_section === 'left' ? editingProduct : undefined}
-                section="left"
-                onComplete={handleFormComplete}
-                onCancel={() => {
-                  setShowLeftForm(false)
-                  setEditingProduct(undefined)
-                }}
-              />
-            </div>
-          )}
-
-          <div className="space-y-4">
-            {filteredLeftProducts.length > 0 ? (
-              filteredLeftProducts.map(product => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onDelete={handleDeleteProduct}
-                  onEdit={handleEditProduct}
-                  onTagClick={handleTagClick}
-                  onImageUpdate={handleImageUpdate}
+      {/* Content container with top margin */}
+      <div className="container mx-auto px-4 mt-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative animate-fadeIn">
+          {/* Left Display Section - like interests */}
+          <section className="bg-white p-6 rounded-lg shadow-lg transition-all duration-300 hover:shadow-xl overflow-hidden relative">
+            {/* Rounded top border for "like" section */}
+            <div className="absolute top-0 left-0 right-0 h-3 bg-green-500 rounded-t-lg"></div>
+            
+            <div className="flex flex-wrap justify-between items-center mb-4 gap-2 pt-2">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-800">
+                  Нравится
+                </h2>
+                <Image 
+                  src="/assets/like.png" 
+                  width={32} 
+                  height={32} 
+                  alt="Like" 
+                  className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8" 
                 />
-              ))
-            ) : (
-              <div className="py-10 text-center text-gray-500 animate-pulse">
-                {tagFilter ? 'Ни один продукт не соответствует вашему фильтру.' : 'Нет продуктов в левом дисплее. Добавьте свой первый продукт!'}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingProduct(undefined)
+                  setShowLeftForm(true)
+                }}
+                className="cursor-pointer px-2 py-1 text-xs sm:text-sm text-white bg-[#2daa4f] rounded-md hover:bg-[#249c47] transition-colors duration-200 whitespace-nowrap transform hover:scale-105 transition-transform duration-300 flex items-center gap-1"
+              >
+                <PlusCircle size={16} />
+                <span className="sm:hidden">Добавить</span>
+                <span className="hidden sm:inline">Добавить</span>
+              </button>
+            </div>
+
+            {showLeftForm && userId && (
+              <div className="mb-6 animate-slideDown">
+                <ProductForm
+                  userId={userId}
+                  product={editingProduct?.display_section === 'left' ? editingProduct : undefined}
+                  section="left"
+                  onComplete={handleFormComplete}
+                  onCancel={() => {
+                    setShowLeftForm(false)
+                    setEditingProduct(undefined)
+                  }}
+                />
               </div>
             )}
-          </div>
-        </section>
 
-        {/* Vertical separator line */}
-        <div className="hidden lg:block absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-black to-transparent opacity-20 transform -translate-x-1/2"></div>
-
-        {/* Right Display Section */}
-        <section className="bg-white p-6 rounded-lg shadow-lg transition-all duration-300 hover:shadow-xl">
-          <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-800">
-              <span className="sm:inline md:hidden lg:hidden">Правый</span>
-              <span className="hidden sm:hidden md:inline">Правый дисплей</span>
-            </h2>
-            <button
-              type="button"
-              onClick={() => {
-                setEditingProduct(undefined)
-                setShowRightForm(true)
-              }}
-              className="cursor-pointer px-2 py-1 text-xs sm:text-sm text-white bg-[#f05d4d] rounded-md hover:bg-[#e04d3e] transition-colors duration-200 whitespace-nowrap transform hover:scale-105 transition-transform duration-300 flex items-center gap-1"
-            >
-              <PlusCircle size={16} />
-              <span className="sm:hidden">Продукт</span>
-              <span className="hidden sm:inline">Добавить продукт</span>
-            </button>
-          </div>
-
-          {showRightForm && userId && (
-            <div className="mb-6 animate-slideDown">
-              <ProductForm
-                userId={userId}
-                product={editingProduct?.display_section === 'right' ? editingProduct : undefined}
-                section="right"
-                onComplete={handleFormComplete}
-                onCancel={() => {
-                  setShowRightForm(false)
-                  setEditingProduct(undefined)
-                }}
-              />
+            <div className="space-y-4">
+              {filteredLeftProducts.length > 0 ? (
+                filteredLeftProducts.map(product => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onDelete={handleDeleteProduct}
+                    onEdit={handleEditProduct}
+                    onTagClick={handleTagClick}
+                    onImageUpdate={handleImageUpdate}
+                  />
+                ))
+              ) : (
+                <div className="py-10 text-center text-gray-500 animate-pulse">
+                  {tagFilter ? 'Ни один продукт не соответствует вашему фильтру.' : 'Нет продуктов в левом дисплее. Добавьте свой первый продукт!'}
+                </div>
+              )}
             </div>
-          )}
+          </section>
 
-          <div className="space-y-4">
-            {filteredRightProducts.length > 0 ? (
-              filteredRightProducts.map(product => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onDelete={handleDeleteProduct}
-                  onEdit={handleEditProduct}
-                  onTagClick={handleTagClick}
-                  onImageUpdate={handleImageUpdate}
+          {/* Vertical separator line */}
+          <div className="hidden lg:block absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-black to-transparent opacity-20 transform -translate-x-1/2"></div>
+
+          {/* Right Display Section dislike interests */}
+          <section className="bg-white p-6 rounded-lg shadow-lg transition-all duration-300 hover:shadow-xl overflow-hidden relative">
+            {/* Rounded top border for "dislike" section */}
+            <div className="absolute top-0 left-0 right-0 h-3 bg-red-500 rounded-t-lg"></div>
+            
+            <div className="flex flex-wrap justify-between items-center mb-4 gap-2 pt-2">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-800">
+                  Не Нравится
+                </h2>
+                <Image 
+                  src="/assets/dislike.png" 
+                  width={32} 
+                  height={32} 
+                  alt="Dislike" 
+                  className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8" 
                 />
-              ))
-            ) : (
-              <div className="py-10 text-center text-gray-500 animate-pulse">
-                {tagFilter ? 'Ни один продукт не соответствует вашему фильтру.' : 'Нет товаров в правом дисплее. Добавьте свой первый товар!'}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingProduct(undefined)
+                  setShowRightForm(true)
+                }}
+                className="cursor-pointer px-2 py-1 text-xs sm:text-sm text-white bg-[#f05d4d] rounded-md hover:bg-[#e04d3e] transition-colors duration-200 whitespace-nowrap transform hover:scale-105 transition-transform duration-300 flex items-center gap-1"
+              >
+                <PlusCircle size={16} />
+                <span className="sm:hidden">Добавить</span>
+                <span className="hidden sm:inline">Добавить</span>
+              </button>
+            </div>
+
+            {showRightForm && userId && (
+              <div className="mb-6 animate-slideDown">
+                <ProductForm
+                  userId={userId}
+                  product={editingProduct?.display_section === 'right' ? editingProduct : undefined}
+                  section="right"
+                  onComplete={handleFormComplete}
+                  onCancel={() => {
+                    setShowRightForm(false)
+                    setEditingProduct(undefined)
+                  }}
+                />
               </div>
             )}
-          </div>
-        </section>
+
+            <div className="space-y-4">
+              {filteredRightProducts.length > 0 ? (
+                filteredRightProducts.map(product => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onDelete={handleDeleteProduct}
+                    onEdit={handleEditProduct}
+                    onTagClick={handleTagClick}
+                    onImageUpdate={handleImageUpdate}
+                  />
+                ))
+              ) : (
+                <div className="py-10 text-center text-gray-500 animate-pulse">
+                  {tagFilter ? 'Ни один продукт не соответствует вашему фильтру.' : 'Нет товаров в правом дисплее. Добавьте свой первый товар!'}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   )

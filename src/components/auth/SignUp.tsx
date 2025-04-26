@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import { debounce } from 'lodash'
+import { AlertCircle, Check, Loader2 } from 'lucide-react'
 
 export default function SignUp() {
   const [email, setEmail] = useState('')
@@ -12,27 +14,102 @@ export default function SignUp() {
   const [fullName, setFullName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false)
+  const [isUsernameAvailable, setIsUsernameAvailable] = useState<boolean | null>(null)
   const router = useRouter()
   const supabase = createClient()
+
+  // Check if username exists in the database
+  const checkUsernameExists = async (username: string) => {
+    if (!username.trim() || username.trim().length < 3) {
+      setIsUsernameAvailable(null)
+      return
+    }
+
+    setIsCheckingUsername(true)
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .ilike('full_name', username.trim())
+        .limit(1)
+      
+      if (error) throw error
+      
+      // Username is available if no matching profiles were found
+      const isAvailable = !data || data.length === 0
+      setIsUsernameAvailable(isAvailable)
+    } catch (err) {
+      console.error('Error checking username:', err)
+      // Don't block sign up if username check fails
+      setIsUsernameAvailable(null)
+    } finally {
+      setIsCheckingUsername(false)
+    }
+  }
+
+  // Debounced function to avoid too many database queries while typing
+  const debouncedCheckUsername = debounce(checkUsernameExists, 500)
+
+  // Effect to check username when it changes
+  useEffect(() => {
+    if (fullName) {
+      debouncedCheckUsername(fullName)
+    } else {
+      setIsUsernameAvailable(null)
+    }
+    
+    return () => {
+      debouncedCheckUsername.cancel()
+    }
+  }, [fullName])
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
 
+    // Validation checks
     if (password.length < 6) {
       setError('Пароль должен содержать не менее 6 символов.')
       setIsLoading(false)
       return
     }
 
+    if (!fullName.trim() || fullName.trim().length < 3) {
+      setError('Имя пользователя должно содержать не менее 3 символов.')
+      setIsLoading(false)
+      return
+    }
+
+    // Final check if username is already taken
+    if (isUsernameAvailable === false) {
+      setError('Это имя пользователя уже занято. Пожалуйста, выберите другое.')
+      setIsLoading(false)
+      return
+    }
+
     try {
+      // Do one final check for username availability before sign-up
+      const { data: existingUsers } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .ilike('full_name', fullName.trim())
+        .limit(1)
+        
+      if (existingUsers && existingUsers.length > 0) {
+        setError('Это имя пользователя уже занято. Пожалуйста, выберите другое.')
+        setIsLoading(false)
+        return
+      }
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            full_name: fullName,
+            full_name: fullName.trim(),
           },
         },
       })
@@ -99,6 +176,40 @@ export default function SignUp() {
     }
   }
 
+  // Function to render username availability indicator
+  const renderUsernameAvailability = () => {
+    if (!fullName || fullName.trim().length < 3) return null
+    
+    if (isCheckingUsername) {
+      return (
+        <div className="flex items-center mt-1 text-xs text-gray-500">
+          <Loader2 size={14} className="animate-spin mr-1" />
+          <span>Проверка доступности...</span>
+        </div>
+      )
+    }
+    
+    if (isUsernameAvailable === true) {
+      return (
+        <div className="flex items-center mt-1 text-xs text-green-600">
+          <Check size={14} className="mr-1" />
+          <span>Имя пользователя доступно</span>
+        </div>
+      )
+    }
+    
+    if (isUsernameAvailable === false) {
+      return (
+        <div className="flex items-center mt-1 text-xs text-red-500">
+          <AlertCircle size={14} className="mr-1" />
+          <span>Имя пользователя уже занято</span>
+        </div>
+      )
+    }
+    
+    return null
+  }
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] p-4">
       <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
@@ -110,15 +221,16 @@ export default function SignUp() {
         </div>
         
         {error && (
-          <div className="p-3 text-sm text-red-600 bg-red-100 rounded-md">
-            {error}
+          <div className="p-3 text-sm text-red-600 bg-red-100 rounded-md flex items-start">
+            <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+            <span>{error}</span>
           </div>
         )}
         
         <form className="mt-8 space-y-6" onSubmit={handleSignUp}>
           <div>
             <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
-              ФИО
+              Имя пользователя
             </label>
             <input
               id="fullName"
@@ -127,9 +239,17 @@ export default function SignUp() {
               required
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="block text-black w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="Полное имя"
+              className={`block text-black w-full px-3 py-2 mt-1 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${
+                isUsernameAvailable === false 
+                  ? 'border-red-300 bg-red-50' 
+                  : isUsernameAvailable === true 
+                    ? 'border-green-300 bg-green-50'
+                    : 'border-gray-300'
+              }`}
+              placeholder="Введите имя пользователя"
+              minLength={3}
             />
+            {renderUsernameAvailability()}
           </div>
           
           <div>
@@ -167,7 +287,7 @@ export default function SignUp() {
           <div>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || isCheckingUsername || isUsernameAvailable === false}
               className="cursor-pointer flex justify-center w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               {isLoading ? 'Создание аккаунта...' : 'Зарегистрироваться'}

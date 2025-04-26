@@ -171,6 +171,37 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
     }
   }
   
+  // Change the function to return the product data instead of just a boolean
+  const checkProductExistsInSameSection = async (productTitle: string): Promise<{ exists: boolean, product?: Product }> => {
+    // Skip check when editing an existing product with the same title
+    if (isEditing && product?.title?.trim().toLowerCase() === productTitle.trim().toLowerCase()) {
+      return { exists: false };
+    }
+    
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*') // Select all fields to get complete product data
+        .eq('user_id', userId)
+        .eq('display_section', section)
+        .ilike('title', productTitle.trim()) // Case insensitive match
+        .limit(1)
+        
+      if (error) {
+        throw error
+      }
+      
+      return { 
+        exists: data && data.length > 0,
+        product: data && data.length > 0 ? data[0] : undefined
+      };
+    } catch (err) {
+      console.error('Error checking for duplicate products in same section:', err)
+      // In case of error, allow submission (fail safe)
+      return { exists: false }
+    }
+  }
+
   const handleMatchFound = (suggestionData: SuggestionProductData | null, isSearching: boolean) => {
     setIsSearchingSuggestions(isSearching)
     
@@ -187,6 +218,11 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
       if (suggestionData && !isEditing) {
         // Store the database product for reference
         setProductFromDb(suggestionData)
+        
+        // IMPORTANT: Set the title field to use the original capitalization from database
+        if (suggestionData.title) {
+          setTitle(suggestionData.title)
+        }
         
         // Auto-fill the fields
         if (suggestionData.description) {
@@ -210,8 +246,6 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
             image: !!suggestionData.image_url
           })
         }
-        
-        // Removed auto-focus to description field
       }
     }
   }
@@ -281,12 +315,61 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
     setError(null)
     
     try {
+      // Variable to store the final title (original or corrected)
+      let finalTitle = title.trim();
+      
       // Skip duplicate check when editing existing product
       if (!isEditing) {
-        // Check if the same product exists in the other display section
-        const { exists, product: duplicated } = await checkProductExistsInOtherSection(title)
-        if (exists && duplicated) {
-          const otherSectionName = section === 'left' ? 'правом' : 'левом'
+        // First check if the product exists in the same display section
+        const { exists, product: existingProduct } = await checkProductExistsInSameSection(title);
+        
+        if (exists && existingProduct) {
+          // Make sure existingProduct.title is not null before comparing
+          if (existingProduct.title && 
+              existingProduct.title.toLowerCase() === title.trim().toLowerCase() && 
+              existingProduct.title !== title.trim()) {
+            // Use the original capitalization for consistency
+            finalTitle = existingProduct.title;
+            
+            // Show a toast notification that we're using the proper capitalization
+            toast.success(
+              `Используется оригинальное написание "${existingProduct.title}"`,
+              {
+                duration: 3000,
+                position: 'top-center',
+              }
+            );
+          } else {
+            // Exact duplicate - show error and prevent submission
+            toast.error(
+              `Продукт с таким названием уже существует в этом разделе.`,
+              {
+                duration: 5000,
+                position: 'top-center',
+                icon: <AlertCircle className="h-5 w-5 text-red-500" />,
+              }
+            );
+            setIsLoading(false);
+            return;
+          }
+        } else if (exists) {
+          // Product exists but we couldn't fetch details
+          toast.error(
+            `Продукт с таким названием уже существует в этом разделе.`,
+            {
+              duration: 5000,
+              position: 'top-center',
+              icon: <AlertCircle className="h-5 w-5 text-red-500" />,
+            }
+          );
+          setIsLoading(false);
+          return;
+        }
+        
+        // Then check if the same product exists in the other display section
+        const { exists: existsInOther, product: duplicated } = await checkProductExistsInOtherSection(title);
+        if (existsInOther && duplicated) {
+          const otherSectionName = section === 'left' ? 'правом' : 'левом';
           
           // Create a custom toast with a delete button
           toast.custom((t) => (
@@ -333,7 +416,7 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
         }
       }
 
-      let imageUrl = product?.image_url || null
+      let imageUrl = product?.image_url || null;
       
       if (image) {
         const fileExt = image.name.split('.').pop()
@@ -377,9 +460,10 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
         finalTag = DEFAULT_TAG;
       }
       
+      // Update productData to use the potentially corrected title (finalTitle)
       const productData: ProductInsert = {
         user_id: userId,
-        title: title.trim(),
+        title: finalTitle, // Use the finalized title with proper capitalization
         description: description.trim(),
         tag: finalTag,
         image_url: imageUrl,

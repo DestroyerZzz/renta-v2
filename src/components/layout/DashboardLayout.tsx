@@ -2,11 +2,11 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
+// import Image from 'next/image'
 import { createClient } from '@/utils/supabase'
 import { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
-import { Share2, LogOut, Settings, Menu, X } from 'lucide-react'
+import { Share2, LogOut, Settings, Menu, X, Home, UserCircle, Compass } from 'lucide-react'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -68,7 +68,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-gray-50">
       {/* Enhanced Navigation - now sticky with transition effects */}
       <nav 
-        className={`fixed top-0 left-0 right-0 z-10 transition-all duration-300 ${
+        className={`sticky top-0 left-0 right-0 z-10 transition-all duration-300 ${
           scrolled 
             ? 'bg-white shadow-md text-indigo-700' 
             : 'bg-indigo-600 text-white'
@@ -76,8 +76,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
           <div className="relative flex items-center justify-between h-16">
-            <div className="absolute inset-y-0 left-0 flex items-center sm:hidden">
-              {/* Mobile menu button */}
+            {/* Mobile menu button - only visible on small screens */}
+            <div className="flex items-center sm:hidden">
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -86,7 +86,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     ? 'text-indigo-600 hover:text-indigo-800 hover:bg-indigo-100'
                     : 'text-white hover:text-white hover:bg-indigo-700'
                 } focus:outline-none transition-colors duration-300`}
-                aria-expanded={mobileMenuOpen ? "true" : "false"}
+                aria-controls="mobile-menu"
+                aria-expanded={mobileMenuOpen}
                 aria-label="Main menu"
               >
                 {mobileMenuOpen ? (
@@ -97,35 +98,60 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </button>
             </div>
             
-            <div className="flex-1 flex items-center justify-center sm:items-stretch sm:justify-start">
-              <div className="flex-shrink-0 flex items-center">
-                <Link href="/dashboard" className="flex items-center">
-                  <div className="relative w-8 h-8 mr-2">
-                    <Image 
-                      src="/logo.png" 
-                      alt="Renta Logo" 
-                      fill 
-                      className="object-contain"
-                    />
-                  </div>
-                  <span className={`text-2xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r ${
-                    scrolled 
-                      ? 'from-indigo-700 via-blue-600 to-indigo-700' 
-                      : 'from-blue-200 via-white to-blue-200'
-                  } animate-gradient bg-size-200 transition-colors duration-300`}>
-                    Renta
-                  </span>
-                </Link>
-              </div>
+            {/* Left side links - hidden on mobile, visible on desktop */}
+            <div className="hidden sm:flex items-center space-x-6 flex-1">
+              <Link 
+                href="/dashboard" 
+                className={`px-2 py-1 text-sm font-medium rounded-md flex items-center space-x-1 ${
+                  scrolled 
+                    ? 'text-indigo-600 hover:text-indigo-800' 
+                    : 'text-white hover:text-indigo-100'
+                } transition-colors duration-300`}
+              >
+                <Home className="w-4 h-4" />
+                <span>Главная</span>
+              </Link>
+              <Link 
+                href="/explore" 
+                className={`px-2 py-1 text-sm font-medium rounded-md flex items-center space-x-1 ${
+                  scrolled 
+                    ? 'text-indigo-600 hover:text-indigo-800' 
+                    : 'text-white hover:text-indigo-100'
+                } transition-colors duration-300`}
+              >
+                <Compass className="w-4 h-4" />
+                <span>Обзор</span>
+              </Link>
             </div>
             
-            {/* Desktop menu */}
-            <div className="absolute inset-y-0 right-0 flex items-center pr-2 sm:static sm:inset-auto sm:ml-6 sm:pr-0">
-              <div className="hidden sm:flex items-center space-x-4">
+            {/* Centered logo */}
+            <div className="flex items-center justify-center">
+              <Link href="/dashboard" className="flex items-center">
+                {/* <div className="relative w-8 h-8 mr-2">
+                  <Image 
+                    src="/logo.png" 
+                    alt="Renta Logo" 
+                    fill 
+                    className="object-contain"
+                  />
+                </div> */}
+                <span className={`text-2xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r ${
+                  scrolled 
+                    ? 'from-indigo-700 via-blue-600 to-indigo-700' 
+                    : 'from-blue-200 via-white to-blue-200'
+                } animate-gradient bg-size-200 transition-colors duration-300`}>
+                  Open Mind
+                </span>
+              </Link>
+            </div>
+            
+            {/* Right side menu items */}
+            <div className="flex items-center flex-1 justify-end">
+              <div className="hidden sm:flex items-center space-x-3">
                 <button
                   type="button"
                   onClick={handleShare}
-                  className={`cursor-pointer px-3 py-2 text-sm font-medium rounded-md flex items-center space-x-2 ${
+                  className={`cursor-pointer px-3 py-2 text-sm font-medium rounded-md flex items-center space-x-1 ${
                     scrolled 
                       ? 'text-indigo-600 hover:text-indigo-800' 
                       : 'text-white hover:text-indigo-100'
@@ -134,6 +160,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <Share2 className="w-4 h-4" />
                   <span>Поделиться</span>
                 </button>
+                <Link 
+                  href="/dashboard/profile" 
+                  className={`p-2 rounded-md flex items-center justify-center ${
+                    scrolled 
+                      ? 'text-indigo-600 hover:bg-indigo-100' 
+                      : 'text-white hover:bg-indigo-700'
+                  } transition-colors duration-300`}
+                  aria-label="Настройки профиля"
+                  title="Настройки профиля"
+                >
+                  <Settings className="w-5 h-5" />
+                </Link>
                 <button
                   type="button"
                   onClick={handleLogout}
@@ -145,20 +183,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   } disabled:opacity-50 transition-colors duration-300`}
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>{isLoggingOut ? 'Выход из системы...' : 'Выйти'}</span>
+                  <span>{isLoggingOut ? 'Выход...' : 'Выйти'}</span>
                 </button>
-                <Link 
-                  href="/dashboard/profile" 
-                  className={`px-3 py-2 text-sm font-medium rounded-md flex items-center justify-center ${
-                    scrolled 
-                      ? 'text-indigo-600 hover:bg-indigo-100' 
-                      : 'text-white hover:bg-indigo-700'
-                  } transition-colors duration-300`}
-                  aria-label="Настройки профиля"
-                  title="Настройки профиля"
-                >
-                  <Settings className="w-5 h-5" />
-                </Link>
               </div>
             </div>
           </div>
@@ -166,13 +192,50 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         
         {/* Mobile menu, show/hide based on menu state */}
         <div 
+          id="mobile-menu"
           className={`sm:hidden transition-all duration-300 ease-in-out transform ${
-            mobileMenuOpen ? 'max-h-60 opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
+            mobileMenuOpen ? 'max-h-80 opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
           }`}
         >
           <div className={`px-2 pt-2 pb-3 space-y-1 shadow-lg ${
             scrolled ? 'bg-white' : 'bg-indigo-700'
           }`}>
+            <Link 
+              href="/dashboard" 
+              onClick={() => setMobileMenuOpen(false)}
+              className={`block w-full text-left px-3 py-3 text-base font-medium rounded-md flex items-center space-x-3 ${
+                scrolled 
+                  ? 'text-indigo-600 hover:bg-indigo-100' 
+                  : 'text-white hover:bg-indigo-600'
+              } transition-colors duration-300`}
+            >
+              <Home className="w-5 h-5" />
+              <span>Главная</span>
+            </Link>
+            <Link 
+              href="/explore" 
+              onClick={() => setMobileMenuOpen(false)}
+              className={`block w-full text-left px-3 py-3 text-base font-medium rounded-md flex items-center space-x-3 ${
+                scrolled 
+                  ? 'text-indigo-600 hover:bg-indigo-100' 
+                  : 'text-white hover:bg-indigo-600'
+              } transition-colors duration-300`}
+            >
+              <Compass className="w-5 h-5" />
+              <span>Обзор</span>
+            </Link>
+            <Link 
+              href="/dashboard/profile" 
+              onClick={() => setMobileMenuOpen(false)}
+              className={`block w-full text-left px-3 py-3 text-base font-medium rounded-md flex items-center space-x-3 ${
+                scrolled 
+                  ? 'text-indigo-600 hover:bg-indigo-100' 
+                  : 'text-white hover:bg-indigo-600'
+              } transition-colors duration-300`}
+            >
+              <UserCircle className="w-5 h-5" />
+              <span>Профиль</span>
+            </Link>
             <button
               type="button"
               onClick={handleShare}
