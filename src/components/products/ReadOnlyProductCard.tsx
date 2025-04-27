@@ -96,7 +96,7 @@ export default function ReadOnlyProductCard({ product, onTagClick }: ReadOnlyPro
               {isDescriptionLong && (
                 <button 
                   onClick={() => setShowFullDescription(!showFullDescription)}
-                  className="cursor-pointer text-xs text-indigo-600 hover:text-indigo-800 mt-1 transition-all duration-200 hover:underline focus:outline-none"
+                  className="cursor-pointer text-xs text-[#3d82f7] hover:text-[#2d6ce0] mt-1 transition-all duration-200 hover:underline focus:outline-none"
                 >
                   {showFullDescription ? 'Показать меньше' : 'Показать больше'}
                 </button>
@@ -107,7 +107,7 @@ export default function ReadOnlyProductCard({ product, onTagClick }: ReadOnlyPro
             <div className="flex justify-between items-center py-1 sm:py-2 border-t border-gray-100 group-hover:border-indigo-50 transition-colors duration-300">
               <button
                 onClick={handleTagClick}
-                className="cursor-pointer text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline focus:outline-none transition-all duration-200 transform hover:translate-x-1 flex items-center gap-1"
+                className="cursor-pointer text-xs font-medium text-[#3d82f7] hover:text-[#2d6ce0] hover:underline focus:outline-none transition-all duration-200 transform hover:translate-x-1 flex items-center gap-1"
               >
                 <Tag size={12} />
                 <span className="md:inline">{`#${getDisplayTag()}`}</span>

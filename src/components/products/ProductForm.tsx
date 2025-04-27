@@ -67,18 +67,20 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
     }
   }, [product])
 
-  // Handle tag changes - strip # if user adds it
+  // Handle tag changes - strip # and commas if user adds them
   const handleTagChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!lockedFields.tag) {
       const value = e.target.value
       
-      // Remove # symbol if user types it
+      // Remove # symbol and commas if user types them
       const cleanTag = value.startsWith('#') ? value.substring(1) : value
-      setTagWithoutHash(cleanTag)
+      const tagWithoutCommas = cleanTag.replace(/,/g, '')
+      
+      setTagWithoutHash(tagWithoutCommas)
       
       // Store the tag value - we'll add the # only during submission
       // Don't add # here to prevent duplicates
-      setTag(cleanTag)
+      setTag(tagWithoutCommas)
     }
   }
   

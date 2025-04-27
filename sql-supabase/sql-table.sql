@@ -49,10 +49,12 @@ CREATE POLICY "Users can delete their own products" ON products
 CREATE OR REPLACE FUNCTION public.create_profile_for_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, full_name, created_at)
+  INSERT INTO public.profiles (id, full_name, username, created_at, updated_at)
   VALUES (
     new.id,
     new.raw_user_meta_data->>'full_name',
+    new.raw_user_meta_data->>'username',
+    now(),
     now()
   );
   RETURN new;

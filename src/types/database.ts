@@ -17,6 +17,7 @@ export interface Database {
           cover_image_url: string | null
           updated_at: string | null
           created_at: string
+          username: string | null
         }
         Insert: {
           id: string
@@ -25,6 +26,7 @@ export interface Database {
           cover_image_url?: string | null
           updated_at?: string | null
           created_at?: string
+          username?: string | null
         }
         Update: {
           id?: string
@@ -33,6 +35,7 @@ export interface Database {
           cover_image_url?: string | null
           updated_at?: string | null
           created_at?: string
+          username?: string | null
         }
       }
       products: {

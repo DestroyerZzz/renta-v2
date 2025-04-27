@@ -21,6 +21,12 @@ export async function createClient() {
           cookieStore.set({ name, value: '', ...options })
         },
       },
+      global: {
+        headers: {
+          apikey: SUPABASE_CONFIG.anonKey,
+          'Content-Type': 'application/json',
+        },
+      },
     }
   )
 }

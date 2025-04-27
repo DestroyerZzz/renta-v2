@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/utils/supabase'
 import { Database } from '@/types/database'
 import SupabaseImage from '../ui/SupabaseImage'
 import ConfirmationDialog from '../ui/ConfirmationDialog'
-import { Edit, Trash2, Tag, Upload, Loader2 } from 'lucide-react'
+import { Edit, Trash2, Tag, Upload, Loader2, MoreVertical } from 'lucide-react'
 
 type Product = Database['public']['Tables']['products']['Row']
 
@@ -34,6 +34,8 @@ export default function ProductCard({
   const [isImageLoaded, setIsImageLoaded] = useState(false)
   const [isAuthor, setIsAuthor] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [showDropdown, setShowDropdown] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
   
   // Use onImageUpdate if provided, otherwise fall back to onEdit
@@ -53,6 +55,18 @@ export default function ProductCard({
     };
     
     checkAuthor();
+    
+    // Add click outside listener for dropdown
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, [product.image_url, product.user_id, supabase]);
 
   const handleDeleteClick = () => {
@@ -101,8 +115,8 @@ export default function ProductCard({
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${product.id}-${Date.now()}.${fileExt}`;
       
-      console.log('Attempting to upload with path:', fileName);
-      console.log('Current user ID:', user.id);
+      // console.log('Attempting to upload with path:', fileName);
+      // console.log('Current user ID:', user.id);
       
       // Simulate upload progress
       const progressInterval = setInterval(() => {
@@ -220,14 +234,14 @@ export default function ProductCard({
                     <div className="flex flex-col items-center justify-center w-full h-full">
                       {isUploading ? (
                         <div className="flex flex-col items-center justify-center w-full h-full">
-                          <Loader2 size={24} className="text-indigo-500 mb-1 animate-spin" />
+                          <Loader2 size={24} className="text-[#3d82f7] mb-1 animate-spin" />
                           <p className="text-gray-500 text-xs sm:text-sm text-center">
                             Загрузка... {uploadProgress}%
                           </p>
                           {uploadProgress > 0 && (
                             <div className="w-4/5 mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-indigo-500 transition-all duration-200" 
+                                className="h-full bg-[#3d82f7] transition-all duration-200" 
                                 style={{ width: `${uploadProgress}%` }} 
                               />
                             </div>
@@ -262,7 +276,48 @@ export default function ProductCard({
           </div>
           
           {/* Right side - Content */}
-          <div className="p-2 sm:p-3 md:p-4 flex-1 flex flex-col min-w-0">
+          <div className="p-2 sm:p-3 md:p-4 flex-1 flex flex-col min-w-0 relative">
+            {/* Action dropdown menu - only visible for authors */}
+            {isAuthor && (
+              <div className="absolute top-2 right-2 z-10" ref={dropdownRef}>
+                <button 
+                  onClick={() => setShowDropdown(!showDropdown)}
+                  className="p-1.5 rounded-full hover:bg-gray-100 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer"
+                  aria-label="Действия с продуктом"
+                >
+                  <MoreVertical size={18} className="text-gray-500 hover:text-indigo-600" />
+                </button>
+                
+                {showDropdown && (
+                  <div className="absolute right-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-100 z-20 w-[160px] py-1 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDropdown(false);
+                        onEdit(product);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-indigo-50 transition-colors duration-150 text-gray-700 hover:text-[#3d82f7] cursor-pointer"
+                    >
+                      <Edit size={15} className="text-[#3d82f7]" />
+                      <span>Редактировать</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDropdown(false);
+                        handleDeleteClick();
+                      }}
+                      disabled={isDeleting}
+                      className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-red-50 transition-colors duration-150 text-gray-700 hover:text-red-600 disabled:opacity-50 disabled:hover:bg-white disabled:hover:text-gray-400 cursor-pointer"
+                    >
+                      <Trash2 size={15} className="text-red-500" />
+                      <span>{isDeleting ? 'Удаление...' : 'Удалить'}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            
             {/* Title */}
             {product.title && (
               <h3 className="font-medium text-gray-800 text-xs sm:text-sm md:text-base mb-1 break-words line-clamp-2">
@@ -282,7 +337,7 @@ export default function ProductCard({
                 <button 
                   type="button"
                   onClick={() => setShowFullDescription(!showFullDescription)}
-                  className="cursor-pointer text-xs text-indigo-600 hover:text-indigo-800 mt-1 transition-all duration-200 hover:underline focus:outline-none"
+                  className="cursor-pointer text-xs text-[#3d82f7] hover:text-[#2d6ce0] mt-1 transition-all duration-200 hover:underline focus:outline-none"
                 >
                   {showFullDescription ? 'Показать меньше' : 'Показать больше'}
                 </button>
@@ -294,7 +349,7 @@ export default function ProductCard({
               <button
                 type="button"
                 onClick={handleTagClick}
-                className="cursor-pointer text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline focus:outline-none transition-all duration-200 transform hover:translate-x-1 flex items-center gap-1"
+                className="cursor-pointer text-xs font-medium text-[#3d82f7] hover:text-[#2d6ce0] hover:underline focus:outline-none transition-all duration-200 transform hover:translate-x-1 flex items-center gap-1"
               >
                 <Tag size={12} />
                 <span className="md:inline">{`#${getDisplayTag()}`}</span>
@@ -302,36 +357,6 @@ export default function ProductCard({
               <div className="text-xs text-gray-500 group-hover:text-gray-700 transition-colors duration-300">
                 {new Date(product.created_at).toLocaleDateString()}
               </div>
-            </div>
-            
-            {/* Action buttons */}
-            <div className="flex justify-between gap-2 pt-2 w-full">
-              {isAuthor && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => onEdit(product)}
-                    title="Редактировать"
-                    aria-label="Редактировать"
-                    className="cursor-pointer px-2 py-1 text-xs sm:text-sm text-indigo-600 border border-indigo-600 rounded-md transition-all duration-200 hover:bg-indigo-50 whitespace-nowrap focus:outline-none flex items-center gap-1"
-                  >
-                    <Edit size={16} className="flex-shrink-0" />
-                    <span className="hidden sm:inline">Редактировать</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDeleteClick}
-                    disabled={isDeleting}
-                    title="Удалить"
-                    aria-label="Удалить"
-                    className="cursor-pointer px-2 py-1 text-xs sm:text-sm text-white bg-red-500 rounded-md transition-all duration-200 hover:bg-red-600 disabled:opacity-50 whitespace-nowrap flex items-center gap-1"
-                  >
-                    <Trash2 size={16} className="flex-shrink-0" />
-                    <span className="hidden sm:inline">{isDeleting ? 'Удаление...' : 'Удалить'}</span>
-                    {isDeleting && <span className="sm:hidden">...</span>}
-                  </button>
-                </>
-              )}
             </div>
           </div>
         </div>

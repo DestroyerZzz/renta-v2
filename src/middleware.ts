@@ -21,14 +21,16 @@ export async function middleware(request: NextRequest) {
             return request.cookies.get(name)?.value
           },
           set(name: string, value: string, options: CookieOptions) {
-            request.cookies.set({
+            // Use response.cookies instead of request.cookies for setting cookies
+            response.cookies.set({
               name,
               value,
               ...options,
             })
           },
           remove(name: string, options: CookieOptions) {
-            request.cookies.set({
+            // Use response.cookies instead of request.cookies for removing cookies
+            response.cookies.set({
               name,
               value: '',
               ...options,
@@ -58,8 +60,52 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
 
-    // Allow public access to profile pages
+    // Handle public profile routes - support for both username and userId lookups
     if (isPublicProfileRoute) {
+      // Extract the profile identifier (can be username or userId)
+      const profileIdentifier = request.nextUrl.pathname.split('/')[2]
+      
+      if (profileIdentifier) {
+        try {
+          // First try to find profile by username
+          const { data: profileByUsername } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('username', profileIdentifier)
+            .single()
+            
+          if (profileByUsername) {
+            // If we found a profile by username, set the user ID in the request headers
+            response.headers.set('x-profile-id', profileByUsername.id)
+            response.headers.set('x-profile-type', 'username')
+            return response
+          }
+          
+          // If not found by username, try to find by user ID
+          const { data: profileById } = await supabase
+            .from('profiles')
+            .select('id, username')
+            .eq('id', profileIdentifier)
+            .single()
+            
+          if (profileById) {
+            // If user has a username, redirect to the username-based URL
+            if (profileById.username) {
+              return NextResponse.redirect(new URL(`/profile/${profileById.username}`, request.url))
+            }
+            
+            // Otherwise just set the user ID in the request headers
+            response.headers.set('x-profile-id', profileById.id)
+            response.headers.set('x-profile-type', 'userId')
+            return response
+          }
+        } catch (e) {
+          console.error('Error in profile lookup middleware:', e)
+        }
+      }
+      
+      // If we reach here, we couldn't find a valid profile
+      // We'll continue to the profile page which can handle displaying a "not found" state
       return response
     }
 

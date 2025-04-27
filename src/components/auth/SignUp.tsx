@@ -6,121 +6,181 @@ import { createClient } from '@/utils/supabase'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { debounce } from 'lodash'
-import { AlertCircle, Check, Loader2 } from 'lucide-react'
+import { AlertCircle, Check, Loader2, User, X, Mail, Lock } from 'lucide-react'
 
 export default function SignUp() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [username, setUsername] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isCheckingUsername, setIsCheckingUsername] = useState(false)
   const [isUsernameAvailable, setIsUsernameAvailable] = useState<boolean | null>(null)
+  const [usernameError, setUsernameError] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
+
+  // Validate username format (only allow letters, numbers, underscores, and hyphens)
+  const validateUsername = (username: string): boolean => {
+    const usernameRegex = /^[a-zA-Z0-9_-]+$/;
+    return usernameRegex.test(username);
+  };
 
   // Check if username exists in the database
   const checkUsernameExists = async (username: string) => {
     if (!username.trim() || username.trim().length < 3) {
-      setIsUsernameAvailable(null)
-      return
+      setIsUsernameAvailable(null);
+      return;
     }
 
-    setIsCheckingUsername(true)
+    // Validate username format
+    if (!validateUsername(username)) {
+      setUsernameError('Имя пользователя может содержать только буквы, цифры, подчеркивания и дефисы.');
+      setIsUsernameAvailable(false);
+      return;
+    } else {
+      setUsernameError(null);
+    }
+
+    setIsCheckingUsername(true);
     
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('full_name')
-        .ilike('full_name', username.trim())
-        .limit(1)
+        .select('username')
+        .eq('username', username.trim())
+        .limit(1);
       
-      if (error) throw error
+      if (error) throw error;
       
       // Username is available if no matching profiles were found
-      const isAvailable = !data || data.length === 0
-      setIsUsernameAvailable(isAvailable)
+      const isAvailable = !data || data.length === 0;
+      setIsUsernameAvailable(isAvailable);
     } catch (err) {
-      console.error('Error checking username:', err)
+      console.error('Error checking username:', err);
       // Don't block sign up if username check fails
-      setIsUsernameAvailable(null)
+      setIsUsernameAvailable(null);
     } finally {
-      setIsCheckingUsername(false)
+      setIsCheckingUsername(false);
     }
-  }
+  };
 
   // Debounced function to avoid too many database queries while typing
-  const debouncedCheckUsername = debounce(checkUsernameExists, 500)
+  const debouncedCheckUsername = debounce(checkUsernameExists, 500);
 
   // Effect to check username when it changes
   useEffect(() => {
-    if (fullName) {
-      debouncedCheckUsername(fullName)
+    if (username) {
+      debouncedCheckUsername(username);
     } else {
-      setIsUsernameAvailable(null)
+      setIsUsernameAvailable(null);
+      setUsernameError(null);
     }
     
     return () => {
-      debouncedCheckUsername.cancel()
-    }
-  }, [fullName])
+      debouncedCheckUsername.cancel();
+    };
+  }, [username]);
 
   const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError(null)
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
 
     // Validation checks
     if (password.length < 6) {
-      setError('Пароль должен содержать не менее 6 символов.')
-      setIsLoading(false)
-      return
+      setError('Пароль должен содержать не менее 6 символов.');
+      setIsLoading(false);
+      return;
     }
 
-    if (!fullName.trim() || fullName.trim().length < 3) {
-      setError('Имя пользователя должно содержать не менее 3 символов.')
-      setIsLoading(false)
-      return
+    if (!fullName.trim()) {
+      setError('Пожалуйста, введите ваше имя.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!username.trim() || username.trim().length < 3) {
+      setError('Имя пользователя должно содержать не менее 3 символов.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!validateUsername(username)) {
+      setError('Имя пользователя может содержать только буквы, цифры, подчеркивания и дефисы.');
+      setIsLoading(false);
+      return;
     }
 
     // Final check if username is already taken
     if (isUsernameAvailable === false) {
-      setError('Это имя пользователя уже занято. Пожалуйста, выберите другое.')
-      setIsLoading(false)
-      return
+      setError('Это имя пользователя уже занято. Пожалуйста, выберите другое.');
+      setIsLoading(false);
+      return;
     }
 
     try {
       // Do one final check for username availability before sign-up
       const { data: existingUsers } = await supabase
         .from('profiles')
-        .select('full_name')
-        .ilike('full_name', fullName.trim())
-        .limit(1)
+        .select('username')
+        .eq('username', username.trim())
+        .limit(1);
         
       if (existingUsers && existingUsers.length > 0) {
-        setError('Это имя пользователя уже занято. Пожалуйста, выберите другое.')
-        setIsLoading(false)
-        return
+        setError('Это имя пользователя уже занято. Пожалуйста, выберите другое.');
+        setIsLoading(false);
+        return;
       }
       
+      // Create the user account
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             full_name: fullName.trim(),
+            username: username.trim(), // Store username in auth metadata as well
           },
         },
-      })
+      });
 
       if (error) {
-        setError(error.message)
-        return
+        setError(error.message);
+        return;
       }
 
-      // After successful signup, show email verification toast
       if (data.user) {
+        // Store profile data in session storage for immediate access on profile page
+        try {
+          sessionStorage.setItem('userProfile', JSON.stringify({
+            id: data.user.id,
+            full_name: fullName.trim(),
+            username: username.trim()
+          }));
+          // console.log('Profile data saved to session storage with ID');
+        } catch (storageError) {
+          console.error('Error storing profile data in session:', storageError);
+        }
+
+        // The database trigger should handle profile creation automatically
+        // Let's just wait a moment to ensure the trigger has time to execute
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Now check if the profile was created (don't try to create it again)
+        const { data: checkProfile, error: checkError } = await supabase
+          .from('profiles')
+          .select('id, full_name, username')
+          .eq('id', data.user.id)
+          .single();
+          
+        if (checkError || !checkProfile) {
+          // console.log('Profile not found yet, this is normal as it might still be creating');
+        } else {
+          // console.log('Profile found:', checkProfile);
+        }
+
         // Display enhanced verification toast notification
         toast.custom(
           (t) => (
@@ -165,20 +225,20 @@ export default function SignUp() {
         );
         
         // Navigate to dashboard after toast is shown
-        router.push('/dashboard')
-        router.refresh()
+        router.push('/dashboard');
+        router.refresh();
       }
     } catch (error) {
-      setError('An unexpected error occurred')
-      console.error('Sign up error:', error)
+      setError('An unexpected error occurred');
+      console.error('Sign up error:', error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   // Function to render username availability indicator
   const renderUsernameAvailability = () => {
-    if (!fullName || fullName.trim().length < 3) return null
+    if (!username || username.trim().length < 3) return null;
     
     if (isCheckingUsername) {
       return (
@@ -186,7 +246,16 @@ export default function SignUp() {
           <Loader2 size={14} className="animate-spin mr-1" />
           <span>Проверка доступности...</span>
         </div>
-      )
+      );
+    }
+    
+    if (usernameError) {
+      return (
+        <div className="flex items-center mt-1 text-xs text-red-500">
+          <X size={14} className="mr-1" />
+          <span>{usernameError}</span>
+        </div>
+      );
     }
     
     if (isUsernameAvailable === true) {
@@ -195,20 +264,20 @@ export default function SignUp() {
           <Check size={14} className="mr-1" />
           <span>Имя пользователя доступно</span>
         </div>
-      )
+      );
     }
     
-    if (isUsernameAvailable === false) {
+    if (isUsernameAvailable === false && !usernameError) {
       return (
         <div className="flex items-center mt-1 text-xs text-red-500">
           <AlertCircle size={14} className="mr-1" />
           <span>Имя пользователя уже занято</span>
         </div>
-      )
+      );
     }
     
-    return null
-  }
+    return null;
+  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] p-4">
@@ -230,58 +299,97 @@ export default function SignUp() {
         <form className="mt-8 space-y-6" onSubmit={handleSignUp}>
           <div>
             <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
+              ФИО
+            </label>
+            <div className="relative mt-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <User size={16} className="text-gray-400" />
+              </div>
+              <input
+                id="fullName"
+                name="fullName"
+                type="text"
+                required
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="block text-black w-full pl-10 pr-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Введите имя"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
               Имя пользователя
             </label>
-            <input
-              id="fullName"
-              name="fullName"
-              type="text"
-              required
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className={`block text-black w-full px-3 py-2 mt-1 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${
-                isUsernameAvailable === false 
-                  ? 'border-red-300 bg-red-50' 
-                  : isUsernameAvailable === true 
-                    ? 'border-green-300 bg-green-50'
-                    : 'border-gray-300'
-              }`}
-              placeholder="Введите имя пользователя"
-              minLength={3}
-            />
+            <div className="relative mt-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <User size={16} className="text-gray-400" />
+              </div>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className={`block text-black w-full pl-10 pr-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${
+                  isUsernameAvailable === false 
+                    ? 'border-red-300 bg-red-50' 
+                    : isUsernameAvailable === true && !usernameError
+                      ? 'border-green-300 bg-green-50'
+                      : 'border-gray-300'
+                }`}
+                placeholder="Уникальное имя пользователя"
+                minLength={3}
+              />
+            </div>
             {renderUsernameAvailability()}
+            <p className="mt-1 text-xs text-gray-500">
+              Используйте только буквы, цифры, дефисы и подчеркивания
+            </p>
           </div>
           
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">
               Адрес электронной почты
             </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="block text-black w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="Адрес электронной почты"
-            />
+            <div className="relative mt-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Mail size={16} className="text-gray-400" />
+              </div>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="block text-black w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Адрес электронной почты"
+              />
+            </div>
           </div>
           
-          <div>
+          <div className="mt-4">
             <label htmlFor="password" className="block text-sm font-medium text-gray-700">
               Пароль
             </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="block text-black w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="Пароль (минимум 6 символов)"
-            />
+            <div className="relative mt-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Lock size={16} className="text-gray-400" />
+              </div>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="block text-black w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Пароль (минимум 6 символов)"
+              />
+            </div>
           </div>
           
           <div>
