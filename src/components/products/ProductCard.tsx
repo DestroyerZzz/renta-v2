@@ -216,7 +216,7 @@ export default function ProductCard({
                 <div className="w-full h-full relative">
                   <SupabaseImage 
                     src={product.image_url} 
-                    alt={product.title || description.substring(0, 30) || 'Изображение продукта'} 
+                    alt={product.title || description.substring(0, 30) || 'Изображение интереса'} 
                     className={`w-full h-full object-cover transition-all duration-500 ${
                       isImageLoaded ? 'opacity-100' : 'opacity-0'
                     }`}
@@ -252,8 +252,8 @@ export default function ProductCard({
                           htmlFor={`image-upload-${product.id}`}
                           className="cursor-pointer flex flex-col items-center justify-center w-full h-full"
                         >
-                          <Upload size={20} className="text-indigo-500 mb-1" />
-                          <p className="text-gray-500 text-xs sm:text-sm group-hover:text-indigo-500 transition-colors duration-300">
+                          <Upload size={20} className="text-[#3d82f7] mb-1" />
+                          <p className="text-gray-500 text-xs sm:text-sm group-hover:text-[#3d82f7] transition-colors duration-300">
                             Добавить фото
                           </p>
                           <input 
@@ -268,7 +268,7 @@ export default function ProductCard({
                       )}
                     </div>
                   ) : (
-                    <p className="text-gray-500 text-xs sm:text-sm group-hover:text-indigo-500 transition-colors duration-300">Нет изображения</p>
+                    <p className="text-gray-500 text-xs sm:text-sm group-hover:text-[#3d82f7] transition-colors duration-300">Нет изображения</p>
                   )}
                 </div>
               )}
@@ -283,9 +283,9 @@ export default function ProductCard({
                 <button 
                   onClick={() => setShowDropdown(!showDropdown)}
                   className="p-1.5 rounded-full hover:bg-gray-100 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer"
-                  aria-label="Действия с продуктом"
+                  aria-label="Действия с интересом"
                 >
-                  <MoreVertical size={18} className="text-gray-500 hover:text-indigo-600" />
+                  <MoreVertical size={18} className="text-gray-500 hover:text-[#3d82f7]" />
                 </button>
                 
                 {showDropdown && (
@@ -364,8 +364,8 @@ export default function ProductCard({
       
       {showDeleteConfirm && (
         <ConfirmationDialog
-          title="Удаление продукта"
-          message="Вы уверены, что хотите удалить этот продукт? Это действие нельзя отменить."
+          title="Удаление интереса"
+          message="Вы уверены, что хотите удалить этот интерес? Это действие нельзя отменить."
           confirmText="Удалить"
           cancelText="Отмена"
           onConfirm={handleDeleteConfirm}

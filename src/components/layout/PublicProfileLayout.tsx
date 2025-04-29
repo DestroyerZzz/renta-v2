@@ -32,7 +32,7 @@ export default function PublicProfileLayout({ children }: { children: React.Reac
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="inline-flex items-center justify-center p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 transition-colors duration-300"
                 aria-controls="mobile-menu"
-                aria-expanded={mobileMenuOpen}
+                aria-expanded={mobileMenuOpen ? "true" : "false"}
                 aria-label="Main menu"
               >
                 {mobileMenuOpen ? (
@@ -122,8 +122,8 @@ export default function PublicProfileLayout({ children }: { children: React.Reac
         </div>
       </nav>
       
-      {/* Main Content - Added padding to account for fixed navbar */}
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 pt-20">
+      {/* Main Content - Reduced padding-top to fix spacing */}
+      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 pt-6">
         {children}
       </main>
     </div>

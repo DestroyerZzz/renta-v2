@@ -218,7 +218,7 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-            <h2 className="font-medium text-xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]">{userName}</h2>
+            <h2 className="font-medium text-xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">{userName}</h2>
           </div>
         </div>
 
@@ -226,7 +226,7 @@ export default function DashboardPage() {
         <div className="bg-white shadow py-4 px-2 sticky top-0 z-10 rounded-lg">
           <div className="flex flex-col md:flex-row items-center justify-between">
             {/* Left anchors */}
-            <div className="flex space-x-6 mb-4 md:mb-0">
+            <div className="pl-4 flex space-x-6 mb-4 md:mb-0">
               <a 
                 href="/dashboard"
                 className="text-[#3d82f7] hover:text-[#2d6ce0] transition-colors duration-200 font-medium"
@@ -346,7 +346,7 @@ export default function DashboardPage() {
                   ))
                 ) : (
                   <div className="py-10 text-center text-gray-500 animate-pulse">
-                    {tagFilter ? 'Ни один продукт не соответствует вашему фильтру.' : 'Нет продуктов в левом дисплее. Добавьте свой первый продукт!'}
+                    {tagFilter ? 'Ни один интерес не соответствует вашему фильтру.' : 'Нет интересов в Нравится. Добавьте свой первый интерес!'}
                   </div>
                 )}
               </div>
@@ -416,7 +416,7 @@ export default function DashboardPage() {
                   ))
                 ) : (
                   <div className="py-10 text-center text-gray-500 animate-pulse">
-                    {tagFilter ? 'Ни один продукт не соответствует вашему фильтру.' : 'Нет товаров в правом дисплее. Добавьте свой первый товар!'}
+                    {tagFilter ? 'Ни один интерес не соответствует вашему фильтру.' : 'Нет интересов в Не Нравится. Добавьте свой первый интерес!'}
                   </div>
                 )}
               </div>

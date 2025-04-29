@@ -67,20 +67,18 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
     }
   }, [product])
 
-  // Handle tag changes - strip # and commas if user adds them
+  // Handle tag changes - strip # if user adds it
   const handleTagChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!lockedFields.tag) {
       const value = e.target.value
       
-      // Remove # symbol and commas if user types them
+      // Remove # symbol if user types it
       const cleanTag = value.startsWith('#') ? value.substring(1) : value
-      const tagWithoutCommas = cleanTag.replace(/,/g, '')
-      
-      setTagWithoutHash(tagWithoutCommas)
+      setTagWithoutHash(cleanTag)
       
       // Store the tag value - we'll add the # only during submission
       // Don't add # here to prevent duplicates
-      setTag(tagWithoutCommas)
+      setTag(cleanTag)
     }
   }
   
@@ -661,7 +659,7 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
             disabled={lockedFields.image}
             aria-label="Выберите изображение продукта"
             className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium ${
-              lockedFields.image 
+              lockedFields.image
               ? 'file:bg-gray-100 file:text-gray-400 cursor-not-allowed opacity-75' 
               : 'file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 cursor-pointer'
             }`}
