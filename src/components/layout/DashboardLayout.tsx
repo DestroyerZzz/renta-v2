@@ -223,7 +223,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 className="px-2 py-1 text-sm font-medium rounded-md flex items-center space-x-1 text-gray-700 hover:text-gray-900 transition-colors duration-300"
               >
                 <Compass className="w-4 h-4" />
-                <span>Обзор</span>
+                <span>Открытие</span>
               </Link>
             </div>
             
@@ -292,7 +292,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               className="block w-full text-left px-3 py-3 text-base font-medium rounded-md flex items-center space-x-3 text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-colors duration-300"
             >
               <Compass className="w-5 h-5" />
-              <span>Обзор</span>
+              <span>Открытие</span>
             </Link>
             <Link 
               href="/dashboard/profile" 

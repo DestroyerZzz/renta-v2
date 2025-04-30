@@ -1,24 +1,27 @@
-# Customer Product Dashboard
+# OpenMind
 
-A modern, responsive web application built with Next.js and Supabase that allows companies to manage and display their products in a customizable dashboard format.
+A modern, responsive web application built with Next.js and Supabase that helps users organize and share their interests in a visually appealing dashboard format with separate "Like" and "Dislike" sections.
 
 ## Features
 
-- **Authentication System**: Secure login and registration functionality
-- **Product Management**: Create, read, update, and delete product records
-- **Two-Section Display**: Organize products in left and right display sections
-- **Tag Filtering**: Filter products by tags for convenient categorization
-- **Public Profiles**: Share your product portfolio with others via a shareable public URL
-- **Responsive Design**: Works on desktop and mobile devices
-- **Real-time Updates**: Instant UI updates when data changes
+- **Authentication System**: Secure email/password login and registration
+- **Interest Management**: Create, update, and delete personal interests
+- **Two-Section Display**: Organize interests in "Like" and "Dislike" sections
+- **Tag System**: Categorize interests with hashtags for easy filtering
+- **Tag Suggestions**: Get suggestions for existing tags as you type
+- **Public Profiles**: Share your interests with others via a personalized URL
+- **Customizable Profile**: Add a username, avatar, and cover image
+- **Responsive Design**: Optimized for both desktop and mobile devices
+- **Real-time Updates**: Instant UI refreshes when data changes
 
 ## Tech Stack
 
-- [![Next.js](https://img.shields.io/badge/-Next.js-000000?style=flat&logo=next.js)](https://nextjs.org/) Next.js 15
-- [![React](https://img.shields.io/badge/-React-61DAFB?style=flat&logo=react&logoColor=black)](https://reactjs.org/) React 19
+- [![Next.js](https://img.shields.io/badge/-Next.js-000000?style=flat&logo=next.js)](https://nextjs.org/) Next.js 14
+- [![React](https://img.shields.io/badge/-React-61DAFB?style=flat&logo=react&logoColor=black)](https://reactjs.org/) React 18
 - [![TypeScript](https://img.shields.io/badge/-TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/) TypeScript
-- [![Tailwind CSS](https://img.shields.io/badge/-Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/) Tailwind CSS 4
+- [![Tailwind CSS](https://img.shields.io/badge/-Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/) Tailwind CSS
 - [![Supabase](https://img.shields.io/badge/-Supabase-3ECF8E?style=flat&logo=supabase&logoColor=white)](https://supabase.io/) Supabase (PostgreSQL, Authentication, Storage)
+- [![Lucide Icons](https://img.shields.io/badge/-Lucide_Icons-5468FF?style=flat&logo=feather&logoColor=white)](https://lucide.dev/) Lucide Icons
 - [![Vercel](https://img.shields.io/badge/-Vercel-000000?style=flat&logo=vercel&logoColor=white)](https://vercel.com/) Vercel (recommended deployment)
 
 ## Getting Started
@@ -34,8 +37,8 @@ A modern, responsive web application built with Next.js and Supabase that allows
 1. Clone this repository:
 
 ```bash
-git clone https://github.com/ninja225/product-management.git
-cd product-management
+git clone https://github.com/yourusername/open-mind.git
+cd open-mind
 ```
 
 2. Install dependencies:
@@ -56,12 +59,15 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ### Database Setup
 
 1. Create a new Supabase project
-2. Run the SQL scripts located in the `sql-supabase` directory to configure your tables and storage
-3. Configure authentication providers in the Supabase dashboard
+2. Run the SQL scripts located in the `sql-supabase` directory to configure your database tables:
+   - `sql-table.sql` - Creates the primary tables (products, profiles)
+   - `sql-storage.sql` - Sets up storage buckets for image uploads
+   - `sql-public-profile.sql` - Configures public profile settings
+   - Additional migration scripts for updating schemas
 
 ### Development
 
-Start the development server with Turbopack:
+Start the development server:
 
 ```bash
 npm run dev
@@ -69,46 +75,52 @@ npm run dev
 yarn dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
 
 ## Usage
 
 ### Authentication
 
-- Users can register using email/password through the `/signup` route
-- Login is available on the `/login` route
-- After authentication, users are redirected to the dashboard
+- Users can register with email/password through the `/signup` route
+- Login is available at the `/login` route
+- After authentication, users are redirected to their personal dashboard
 
 ### Dashboard
 
-- The main dashboard (`/dashboard`) displays products in a customizable grid
-- Use the product form to add new products or edit existing ones
-- Products can be filtered by tags or categories
-- Profile information can be viewed and edited at `/dashboard/profile`
+- The main dashboard (`/dashboard`) displays interests in two sections: "Like" and "Dislike"
+- Each section has its own "Add" button to create new interests
+- Interests can be edited or deleted as needed
+- The tag filter at the top allows users to filter interests by hashtag
+- Each interest card displays:
+  - Title
+  - Optional description
+  - Optional image
+  - Hashtag for categorization
+
+### Profile Management
+
+- User profiles can be customized at `/dashboard/profile`
+- Users can update:
+  - Their full name
+  - Username (used for shareable URLs)
+  - Profile avatar
+  - Cover image
 
 ### Public Profiles
 
-- Each user gets a public profile page at `/profile/[userId]`
-- The public profile displays the user's products in a read-only format
-- Users can share their profile URL with clients or stakeholders
-- Products are displayed in the same left/right section layout as in the dashboard
+- Each user gets a public profile at `/profile/[username]` or `/profile/[userId]`
+- The public profile displays the user's interests in the same "Like"/"Dislike" format
+- Interests can be filtered by tag on the public profile
+- Users can share their profile link with others by clicking the "Share" button
 
 ## Project Structure
 
 ```
-├── public/             # Static files
-│   ├── file.svg        # SVG icons
-│   ├── globe.svg
-│   ├── logo.png        # App logo
-│   ├── next.svg
-│   ├── test-image.html
-│   ├── vercel.svg
-│   └── window.svg
+├── public/             # Static files and assets
+│   └── assets/         # Application assets
+│       ├── like.png    # Icon for "Like" section
+│       └── dislike.png # Icon for "Dislike" section
 ├── sql-supabase/       # SQL scripts for database setup
-│   ├── migration-add-title.sql    # Migration to add title field
-│   ├── sql-public-profile.sql     # Public profile visibility settings
-│   ├── sql-storage.sql            # Storage bucket configuration
-│   └── sql-table.sql              # Main table definitions
 ├── src/
 │   ├── app/            # Next.js App Router pages
 │   │   ├── dashboard/           # User dashboard
@@ -118,32 +130,21 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to see the r
 │   │   │   └── [userId]/        # Dynamic route for user profiles
 │   │   └── signup/              # Signup page
 │   ├── components/     # React components
-│   │   ├── auth/       # Authentication components
+│   │   ├── auth/       # Authentication forms
 │   │   ├── layout/     # Layout components
-│   │   ├── products/   # Product-related components
+│   │   ├── products/   # Interest-related components
 │   │   ├── profile/    # Profile components
+│   │   ├── suggestions/# Tag and title suggestion components
 │   │   └── ui/         # Reusable UI components
 │   ├── types/          # TypeScript type definitions
-│   │   └── database.ts # Database type definitions
-│   ├── utils/          # Utilities and helper functions
-│   │   ├── supabase-config.ts   # Supabase configuration
-│   │   ├── supabase-server.ts   # Server-side Supabase client
-│   │   └── supabase.ts          # Browser-side Supabase client
-│   └── middleware.ts   # Next.js middleware for auth
-├── eslint.config.mjs   # ESLint configuration
-├── next.config.ts      # Next.js configuration
-├── package.json        # Project dependencies
-├── postcss.config.mjs  # PostCSS configuration
-├── tsconfig.json       # TypeScript configuration
-├── LICENSE             # MIT License file
-└── README.md           # Project documentation
+│   └── utils/          # Utility functions and Supabase clients
 ```
 
 ## Deployment
 
 ### Deploying on Vercel
 
-The easiest way to deploy this application is using the [Vercel Platform](https://vercel.com/new).
+The easiest way to deploy this application is using the [Vercel Platform](https://vercel.com/new):
 
 1. Push your code to a Git repository (GitHub, GitLab, BitBucket)
 2. Import the project to Vercel
@@ -152,7 +153,7 @@ The easiest way to deploy this application is using the [Vercel Platform](https:
 
 ### Alternative Deployment Options
 
-You can also deploy this Next.js application on any platform that supports Node.js:
+You can also deploy the application on any platform that supports Node.js:
 
 1. Build the application:
 
@@ -162,23 +163,13 @@ npm run build
 yarn build
 ```
 
-2. Start the server in production mode:
+2. Start the server:
 
 ```bash
-npm run start
+npm start
 # or
 yarn start
 ```
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create a branch for your feature (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
 
 ## License
 
@@ -187,6 +178,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - [Next.js](https://nextjs.org/)
+- [React](https://reactjs.org/)
 - [Supabase](https://supabase.io/)
 - [Tailwind CSS](https://tailwindcss.com/)
-- [React](https://reactjs.org/)
+- [Lucide Icons](https://lucide.dev/)
