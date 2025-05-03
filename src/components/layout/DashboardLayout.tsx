@@ -219,7 +219,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <span>Главная</span>
               </Link>
               <Link 
-                href="/explore" 
+                // href="/explore" 
+                href="/404" 
                 className="px-2 py-1 text-sm font-medium rounded-md flex items-center space-x-1 text-gray-700 hover:text-gray-900 transition-colors duration-300"
               >
                 <Compass className="w-4 h-4" />

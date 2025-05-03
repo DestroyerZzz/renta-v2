@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react'
 import { Database } from '@/types/database'
 import SupabaseImage from '../ui/SupabaseImage'
-import { Tag } from 'lucide-react'
+import { Tag, Share, AlertCircle } from 'lucide-react'
+import { createClient } from '@/utils/supabase'
+import toast from 'react-hot-toast'
+import ShareDialog from '../ui/ShareDialog'
 
 type Product = Database['public']['Tables']['products']['Row']
 
@@ -18,6 +21,10 @@ const MAX_DESCRIPTION_LENGTH = 50
 export default function ReadOnlyProductCard({ product, onTagClick }: ReadOnlyProductCardProps) {
   const [showFullDescription, setShowFullDescription] = useState(false)
   const [isImageLoaded, setIsImageLoaded] = useState(false)
+  const [showShareDialog, setShowShareDialog] = useState(false)
+  const [isSharing, setIsSharing] = useState(false)
+  
+  const supabase = createClient()
 
   useEffect(() => {
     if (product.image_url) {
@@ -29,7 +36,6 @@ export default function ReadOnlyProductCard({ product, onTagClick }: ReadOnlyPro
 
   const getDisplayTag = () => {
     const tag = product.tag || DEFAULT_TAG;
-    // If tag already starts with #, don't add another one
     return tag.startsWith('#') ? tag.substring(1) : tag;
   }
 
@@ -37,8 +43,196 @@ export default function ReadOnlyProductCard({ product, onTagClick }: ReadOnlyPro
     e.preventDefault();
     e.stopPropagation();
     if (onTagClick) {
-      // Always pass the original tag to the handler
       onTagClick(product.tag || DEFAULT_TAG);
+    }
+  };
+
+  const handleShareClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowShareDialog(true);
+  };
+
+  const handleShare = async (section: 'left' | 'right') => {
+    setIsSharing(true);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        // User is not logged in - show redirect toast
+        toast.error(
+          <div className="flex flex-col">
+            <span className="font-medium">Необходимо войти в систему</span>
+            <span className="text-sm">Войдите, чтобы добавить интерес в свою коллекцию</span>
+            <button
+              className="mt-2 px-4 py-1 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 transition"
+              onClick={() => {
+                window.location.href = '/login';
+              }}
+            >
+              Перейти к странице входа
+            </button>
+          </div>,
+          { duration: 5000 }
+        );
+        return;
+      }
+      
+      // First check if the product already exists in the selected section
+      const { data: existingInSection, error: sectionCheckError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('display_section', section)
+        .ilike('title', product.title || '')
+        .limit(1);
+        
+      if (sectionCheckError) {
+        throw new Error(`Error checking for duplicates: ${sectionCheckError.message}`);
+      }
+      
+      // If product exists in this section, show error and stop
+      if (existingInSection && existingInSection.length > 0) {
+        toast.error(
+          <div className="flex items-start">
+            <AlertCircle className="h-5 w-5 text-red-500 mr-2 flex-shrink-0 mt-0.5" />
+            <div>
+              <span className="font-medium">Дублирующийся Интерес</span>
+              <p className="text-sm mt-1">
+                Интерес с таким названием уже существует в разделе &quot;{section === 'left' ? 'Нравится' : 'Не Нравится'}&quot;.
+              </p>
+            </div>
+          </div>,
+          { duration: 5000 }
+        );
+        return;
+      }
+      
+      // Then check if the product exists in the other section
+      const otherSection = section === 'left' ? 'right' : 'left';
+      const { data: existingInOtherSection, error: otherSectionCheckError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('display_section', otherSection)
+        .ilike('title', product.title || '')
+        .limit(1);
+        
+      if (otherSectionCheckError) {
+        throw new Error(`Error checking for duplicates: ${otherSectionCheckError.message}`);
+      }
+      
+      // If product exists in other section, show warning toast with action buttons
+      if (existingInOtherSection && existingInOtherSection.length > 0) {
+        const otherSectionName = otherSection === 'left' ? 'Нравится' : 'Не Нравится';
+        const currentSectionName = section === 'left' ? 'Нравится' : 'Не Нравится';
+        
+        toast.custom((t) => (
+          <div 
+            className={`${
+              t.visible ? 'animate-enter' : 'animate-leave'
+            } max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5 overflow-hidden`}
+          >
+            <div className="p-4 w-full">
+              <div className="flex items-start">
+                <div className="flex-shrink-0 pt-0.5">
+                  <AlertCircle className="h-6 w-6 text-orange-500" />
+                </div>
+                <div className="ml-3 flex-1">
+                  <p className="text-sm font-medium text-gray-900">
+                    Дублирующийся Интерес
+                  </p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Этот интерес уже существует в разделе &quot;{otherSectionName}&quot;. Хотите переместить его в &quot;{currentSectionName}&quot;?
+                  </p>
+                  <div className="mt-3 flex space-x-3">
+                    <button
+                      onClick={async () => {
+                        toast.dismiss(t.id);
+                        
+                        // Delete from other section
+                        const { error: deleteError } = await supabase
+                          .from('products')
+                          .delete()
+                          .eq('id', existingInOtherSection[0].id);
+                          
+                        if (deleteError) {
+                          toast.error("Ошибка при удалении существующего интереса");
+                          return;
+                        }
+                        
+                        // Create new product in selected section
+                        const newProduct = {
+                          title: product.title,
+                          description: product.description,
+                          tag: product.tag,
+                          image_url: product.image_url,
+                          display_section: section,
+                          user_id: user.id
+                        };
+                        
+                        const { error: insertError } = await supabase
+                          .from('products')
+                          .insert(newProduct);
+                          
+                        if (insertError) {
+                          toast.error("Ошибка при добавлении интереса");
+                          return;
+                        }
+                        
+                        toast.success(`Интерес успешно перемещен в раздел "${currentSectionName}".`);
+                      }}
+                      className="cursor-pointer inline-flex justify-center rounded-md border border-transparent bg-blue-100 px-4 py-2 text-sm font-medium text-blue-900 hover:bg-blue-200 focus:outline-none"
+                    >
+                      Да, переместить
+                    </button>
+                    <button
+                      onClick={() => toast.dismiss(t.id)}
+                      className="cursor-pointer inline-flex justify-center rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none"
+                    >
+                      Отмена
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ), { duration: 15000 });
+        
+        // Exit without adding - will be handled by the toast action if user confirms
+        return;
+      }
+      
+      // Create a copy of the product for the current user
+      const newProduct = {
+        title: product.title,
+        description: product.description,
+        tag: product.tag,
+        image_url: product.image_url,
+        display_section: section,
+        user_id: user.id
+      };
+      
+      // Insert the product into the user's collection
+      const { error } = await supabase
+        .from('products')
+        .insert(newProduct)
+        .select();
+        
+      if (error) {
+        console.error('Error sharing product:', error);
+        toast.error('Произошла ошибка при добавлении интереса в вашу коллекцию.');
+        return;
+      }
+      
+      toast.success(`Интерес успешно добавлен в раздел "${section === 'left' ? 'Нравится' : 'Не Нравится'}".`);
+    } catch (error) {
+      console.error('Error in share process:', error);
+      toast.error('Произошла ошибка при добавлении интереса.');
+    } finally {
+      setShowShareDialog(false);
+      setIsSharing(false);
     }
   };
 
@@ -46,12 +240,19 @@ export default function ReadOnlyProductCard({ product, onTagClick }: ReadOnlyPro
   const isDescriptionLong = description.length > MAX_DESCRIPTION_LENGTH
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 transition-all duration-300 hover:shadow-xl hover:border-indigo-200 group">
-      {/* Restructured layout - image now at the top left, matching the ProductCard component */}
+    <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200 transition-all duration-300 hover:shadow-xl hover:border-indigo-200 group relative">
+      {/* Add share button to the top right of the card */}
+      <button
+        onClick={handleShareClick}
+        className="cursor-pointer absolute top-2 right-2 z-10 p-1.5 bg-white/80 hover:bg-white rounded-full shadow-md transition-all duration-200 transform hover:scale-110 focus:outline-none"
+        aria-label="Поделиться"
+        title="Поделиться интересом"
+      >
+        <Share size={16} className="text-[#3d82f7]" />
+      </button>
+
       <div className="flex flex-col">
-        {/* Top section with image and title */}
         <div className="flex">
-          {/* Left side - Image - fixed position at top left */}
           <div className="flex items-start justify-center w-[100px] h-[100px] sm:w-[130px] sm:h-[130px] md:w-[150px] md:h-[150px] flex-shrink-0 p-2">
             <div className="relative w-full h-full border border-gray-200 rounded-md overflow-hidden bg-white group-hover:border-indigo-200 transition-colors duration-300">
               {product.image_url ? (
@@ -76,16 +277,13 @@ export default function ReadOnlyProductCard({ product, onTagClick }: ReadOnlyPro
             </div>
           </div>
           
-          {/* Right side - Content */}
           <div className="p-2 sm:p-3 md:p-4 flex-1 flex flex-col min-w-0">
-            {/* Title at the top */}
             {product.title && (
               <h3 className="font-medium text-gray-800 text-xs sm:text-sm md:text-base mb-1 break-words line-clamp-2">
                 {product.title}
               </h3>
             )}
             
-            {/* Description */}
             <div className="mb-2 sm:mb-3 flex-grow">
               <p className={`text-gray-700 text-xs sm:text-sm md:text-base break-words transition-all duration-300 ${
                 !showFullDescription ? 'line-clamp-2 sm:line-clamp-2' : ''
@@ -103,7 +301,6 @@ export default function ReadOnlyProductCard({ product, onTagClick }: ReadOnlyPro
               )}
             </div>
             
-            {/* Tag and date at the bottom */}
             <div className="flex justify-between items-center py-1 sm:py-2 border-t border-gray-100 group-hover:border-indigo-50 transition-colors duration-300">
               <button
                 onClick={handleTagClick}
@@ -119,6 +316,15 @@ export default function ReadOnlyProductCard({ product, onTagClick }: ReadOnlyPro
           </div>
         </div>
       </div>
+      {showShareDialog && (
+        <ShareDialog
+          isOpen={showShareDialog}
+          onClose={() => setShowShareDialog(false)}
+          onShare={handleShare}
+          isLoading={isSharing}
+          productTitle={product.title || 'Интерес без названия'}
+        />
+      )}
     </div>
   )
 }
