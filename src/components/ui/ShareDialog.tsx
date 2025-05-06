@@ -12,9 +12,10 @@ interface ShareOption {
 interface ShareDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onShare: (section: 'left' | 'right') => void;
+  onShare: (section: 'left' | 'right', customDescription?: string) => void;
   isLoading?: boolean;
   productTitle?: string;
+  initialDescription?: string;
 }
 
 export default function ShareDialog({
@@ -22,35 +23,37 @@ export default function ShareDialog({
   onClose,
   onShare,
   isLoading = false,
-  productTitle
+  productTitle,
+  initialDescription = ''
 }: ShareDialogProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [selectedOption, setSelectedOption] = useState<'left' | 'right'>('left');
-  
+  const [description, setDescription] = useState(initialDescription);
+
   const options: ShareOption[] = [
     { label: 'Добавить в "Нравится"', value: 'left' },
     { label: 'Добавить в "Не Нравится"', value: 'right' }
   ];
-  
+
   // Close on ESC key press
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
-    
+
     if (isOpen) {
       window.addEventListener('keydown', handleEsc);
       // Lock body scroll
       document.body.style.overflow = 'hidden';
     }
-    
+
     return () => {
       window.removeEventListener('keydown', handleEsc);
       // Restore body scroll
       document.body.style.overflow = 'unset';
     };
   }, [isOpen, onClose]);
-  
+
   // Close on overlay click
   const handleOverlayClick = (e: React.MouseEvent) => {
     if (e.target === overlayRef.current) {
@@ -59,13 +62,13 @@ export default function ShareDialog({
   };
 
   const handleShare = () => {
-    onShare(selectedOption);
+    onShare(selectedOption, description);
   };
-  
+
   if (!isOpen) return null;
 
   const dialog = (
-    <div 
+    <div
       className="fixed inset-0 bg-black flex items-center justify-center z-[99999] p-4 backdrop-blur-[2px]"
       ref={overlayRef}
       onClick={handleOverlayClick}
@@ -73,7 +76,7 @@ export default function ShareDialog({
       aria-modal="true"
       role="dialog"
     >
-      <div 
+      <div
         className="bg-white w-full max-w-md rounded-lg shadow-xl transform transition-all duration-300 scale-100 opacity-100"
         style={{ willChange: 'transform' }}
       >
@@ -84,13 +87,28 @@ export default function ShareDialog({
               Поделиться интересом
             </h3>
           </div>
-          
+
           {productTitle && (
             <div className="mb-4 p-3 bg-gray-50 rounded-md">
               <p className="text-sm font-medium text-gray-700">{productTitle}</p>
             </div>
           )}
-          
+
+          {/* Description textarea */}
+          <div className="mb-4">
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+              Описание
+            </label>
+            <textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="w-full text-black px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-[#3d82f7] focus:border-[#3d82f7] text-sm"
+              placeholder="Добавьте своё описание интереса"
+            />
+          </div>
+
           <p className="text-sm text-gray-500 mb-4">
             Выберите куда вы хотите добавить этот интерес
           </p>
@@ -100,11 +118,10 @@ export default function ShareDialog({
               <div
                 key={option.value}
                 onClick={() => setSelectedOption(option.value)}
-                className={`cursor-pointer p-3 rounded-lg border-2 transition-all duration-200 flex items-center ${
-                  selectedOption === option.value
-                    ? 'border-[#3d82f7] bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
+                className={`cursor-pointer p-3 rounded-lg border-2 transition-all duration-200 flex items-center ${selectedOption === option.value
+                  ? 'border-[#3d82f7] bg-blue-50'
+                  : 'border-gray-200 hover:border-gray-300'
+                  }`}
               >
                 {option.value === 'left' ? (
                   <ThumbsUp className="h-5 w-5 text-green-500 mr-3" />

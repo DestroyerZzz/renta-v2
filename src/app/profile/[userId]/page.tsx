@@ -13,48 +13,48 @@ export default function PublicProfilePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [actualUserId, setActualUserId] = useState<string | null>(null)
   const [notFound, setNotFound] = useState(false)
-  
+
   // This can be either a userId or a username
   const profileIdentifier = params.userId as string
-  
+
   // Determine if we're dealing with a userId or username, and get the actual userId
   useEffect(() => {
     const resolveProfileIdentifier = async () => {
       try {
         setIsLoading(true)
-        
+
         // First try to find profile by username
         const { data: profileByUsername } = await supabase
           .from('profiles')
           .select('id')
           .eq('username', profileIdentifier)
           .maybeSingle()
-          
+
         if (profileByUsername) {
           // If found by username, use that user ID
           setActualUserId(profileByUsername.id)
           return
         }
-        
+
         // If not found by username, try to find by user ID
         const { data: profileById } = await supabase
           .from('profiles')
           .select('id, username')
           .eq('id', profileIdentifier)
           .maybeSingle()
-          
+
         if (profileById) {
           // If user has a username, redirect to the username-based URL
           if (profileById.username && profileById.username !== profileIdentifier) {
             router.replace(`/profile/${profileById.username}`)
             return
           }
-          
+
           // Otherwise just use the user ID
           setActualUserId(profileById.id)
           return
         }
-        
+
         // If we reach here, no profile was found
         setNotFound(true)
       } catch (error) {
@@ -64,7 +64,7 @@ export default function PublicProfilePage() {
         setIsLoading(false)
       }
     }
-    
+
     if (profileIdentifier) {
       resolveProfileIdentifier()
     }

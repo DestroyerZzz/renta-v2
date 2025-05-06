@@ -4,8 +4,11 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase'
 import SupabaseImage from '@/components/ui/SupabaseImage'
 import ReadOnlyProductCard from '@/components/products/ReadOnlyProductCard'
-import { Search } from 'lucide-react'
+import ProductCard, { DEFAULT_TAG } from '@/components/products/ProductCard'
+import ProductForm from '@/components/products/ProductForm'
+import { Search, PlusCircle } from 'lucide-react'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 
 interface Product {
   id: string
@@ -23,6 +26,7 @@ interface PublicProfileContentProps {
 }
 
 export default function PublicProfileContent({ userId }: PublicProfileContentProps) {
+  const router = useRouter()
   const [userName, setUserName] = useState<string>('')
   const [username, setUsername] = useState<string | null>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -36,18 +40,40 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
   const [profileNotFound, setProfileNotFound] = useState(false)
   const supabase = createClient()
 
+  // Dashboard mode state variables
+  const [isOwner, setIsOwner] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [showLeftForm, setShowLeftForm] = useState(false)
+  const [showRightForm, setShowRightForm] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<Product | undefined>(undefined)
+
+  // Check if current user is the profile owner
+  useEffect(() => {
+    const checkOwnership = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          setCurrentUserId(user.id)
+          setIsOwner(user.id === userId)
+        }
+      } catch (error) {
+        console.error('Error checking user:', error)
+      }
+    }
+
+    checkOwnership()
+  }, [supabase, userId])
+
   useEffect(() => {
     const fetchUserAndProducts = async () => {
       try {
-        // console.log('Fetching profile data for userId:', userId);
-        
         // Get user profile details
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('full_name, avatar_url, cover_image_url, username')
           .eq('id', userId)
           .single()
-        
+
         if (profileError) {
           console.error('Error fetching profile:', profileError);
           if (profileError.code === 'PGRST116') {
@@ -55,7 +81,7 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
           }
           throw profileError;
         }
-        
+
         if (profile) {
           setUserName(profile.full_name || 'Пользователь')
           setUsername(profile.username)
@@ -78,8 +104,6 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
           console.error('Error fetching products:', productError);
           throw productError;
         }
-
-        // console.log('Products fetched:', products?.length || 0);
 
         // Separate products into left and right displays
         if (products) {
@@ -110,16 +134,33 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
       return;
     }
 
-    // Normalize user input for case-insensitive comparison
+    // For owner/dashboard mode, include default tag matching
+    if (isOwner) {
+      const normalizedFilter = tagFilter.toLowerCase().trim();
+      const isDefaultTagSearch = DEFAULT_TAG.toLowerCase().includes(normalizedFilter);
+
+      setFilteredLeftProducts(leftProducts.filter(p =>
+        p.tag?.toLowerCase().includes(normalizedFilter) ||
+        (isDefaultTagSearch && (!p.tag || p.tag.trim() === ''))
+      ));
+
+      setFilteredRightProducts(rightProducts.filter(p =>
+        p.tag?.toLowerCase().includes(normalizedFilter) ||
+        (isDefaultTagSearch && (!p.tag || p.tag.trim() === ''))
+      ));
+      return;
+    }
+
+    // Non-owner/read-only mode filtering
     const normalizedFilter = tagFilter.toLowerCase().trim();
-    
-    // Filter products by tag - now matching from the first letter
+
+    // Filter products by tag - matching from the first letter
     const filteredLeft = leftProducts.filter(product => {
       if (!product.tag) return false;
       const normalizedProductTag = product.tag.toLowerCase();
       return normalizedProductTag.includes(normalizedFilter);
     });
-    
+
     const filteredRight = rightProducts.filter(product => {
       if (!product.tag) return false;
       const normalizedProductTag = product.tag.toLowerCase();
@@ -128,7 +169,7 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
 
     setFilteredLeftProducts(filteredLeft);
     setFilteredRightProducts(filteredRight);
-  }, [tagFilter, leftProducts, rightProducts]);
+  }, [tagFilter, leftProducts, rightProducts, isOwner]);
 
   // Handler for tag click
   const handleTagClick = (tag: string) => {
@@ -141,10 +182,65 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
     }
   };
 
-  // Reset filter
-  // const clearFilter = () => {
-  //   setTagFilter('');
-  // };
+  // Dashboard-specific handlers
+  const handleDeleteProduct = (productId: string) => {
+    setLeftProducts(prev => prev.filter(p => p.id !== productId))
+    setRightProducts(prev => prev.filter(p => p.id !== productId))
+  }
+
+  const handleEditProduct = (product: Product) => {
+    setEditingProduct(product)
+    if (product.display_section === 'left') {
+      setShowLeftForm(true)
+    } else {
+      setShowRightForm(true)
+    }
+  }
+
+  // Handler for image updates directly from ProductCard
+  const handleImageUpdate = (updatedProduct: Product) => {
+    if (updatedProduct.display_section === 'left') {
+      setLeftProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p))
+      setFilteredLeftProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p))
+    } else {
+      setRightProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p))
+      setFilteredRightProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p))
+    }
+  }
+
+  const handleFormComplete = async () => {
+    // Refresh products after form submission
+    if (userId) {
+      setIsLoading(true)
+      try {
+        const { data: products, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+
+        if (error) throw error
+
+        if (products) {
+          const leftProds = products.filter(p => p.display_section === 'left')
+          const rightProds = products.filter(p => p.display_section === 'right')
+          setLeftProducts(leftProds)
+          setRightProducts(rightProds)
+          setFilteredLeftProducts(leftProds)
+          setFilteredRightProducts(rightProds)
+        }
+      } catch (error) {
+        console.error('Error refreshing products:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    // Reset form states
+    setShowLeftForm(false)
+    setShowRightForm(false)
+    setEditingProduct(undefined)
+  }
 
   if (isLoading) {
     return (
@@ -153,7 +249,7 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
       </div>
     );
   }
-  
+
   if (profileNotFound) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
@@ -172,10 +268,12 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
         {/* Cover image section */}
         <div className="rounded-lg relative w-full h-64">
           {coverImageUrl ? (
-            <SupabaseImage 
-              src={coverImageUrl} 
-              alt="Profile Cover" 
+            <SupabaseImage
+              src={coverImageUrl}
+              alt="Profile Cover"
               className="w-full h-full object-cover rounded-lg"
+              priority={true}
+              quality={85}
               fallback={
                 <div className="rounded-lg w-full h-full bg-gradient-to-r from-[#3d82f7] to-purple-600"></div>
               }
@@ -183,15 +281,17 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
           ) : (
             <div className="w-full h-full bg-gradient-to-r from-[#3d82f7] to-purple-600 rounded-lg"></div>
           )}
-          
+
           {/* Centered avatar and username with text shadow */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <div className="relative w-[130px] h-[130px] rounded-full overflow-hidden bg-white p-1 shadow-lg mb-4">
               {avatarUrl ? (
-                <SupabaseImage 
-                  src={avatarUrl} 
-                  alt="User Avatar" 
+                <SupabaseImage
+                  src={avatarUrl}
+                  alt="User Avatar"
                   className="w-full h-full rounded-full object-cover"
+                  priority={true}
+                  quality={90}
                   fallback={
                     <div className="w-full h-full flex items-center justify-center bg-indigo-200 text-indigo-600 text-2xl font-bold rounded-full animate-pulse">
                       {userName?.charAt(0)?.toUpperCase() || 'U'}
@@ -205,25 +305,46 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
               )}
             </div>
             <h2 className="font-medium text-xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">{userName}</h2>
-            {/* {username && (
-              <div className="mt-1 px-3 py-1 bg-black/30 rounded-full text-white text-sm flex items-center">
-                <User size={14} className="mr-1" />
-                <span>@{username}</span>
-              </div>
-            )} */}
           </div>
         </div>
-      
+
         {/* Navigation and filter section - aligned with grid */}
         <div className="bg-white shadow py-4 px-2 sticky top-0 z-10 rounded-lg mb-8">
           <div className="flex flex-col md:flex-row items-center justify-between">
-            {/* Profile interests title */}
-            <div className="pl-4 mb-4 md:mb-0">
-              <h1 className="text-lg font-medium text-black">
-                Интересы профиля {username ? `@${username}` : userName}
-              </h1>
-            </div>
-            
+            {/* Profile interests title or tabs for owner */}
+            {isOwner ? (
+              <div className="pl-4 flex space-x-6 mb-4 md:mb-0">
+                <a
+                  href="/dashboard"
+                  className="text-[#3d82f7] hover:text-[#2d6ce0] transition-colors duration-200 font-medium"
+                >
+                  Профиль
+                </a>
+                <a
+                  href="#"
+                  className="text-gray-600 hover:text-[#2d6ce0] transition-colors duration-200 font-medium"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    router.push('/404');
+                  }}
+                >
+                  Активность
+                </a>
+                <a
+                  href="/dashboard/profile"
+                  className="text-gray-600 hover:text-[#2d6ce0] transition-colors duration-200 font-medium"
+                >
+                  Настройки
+                </a>
+              </div>
+            ) : (
+              <div className="pl-4 mb-4 md:mb-0">
+                <h1 className="text-lg font-medium text-black">
+                  Интересы профиля {username ? `@${username}` : userName}
+                </h1>
+              </div>
+            )}
+
             {/* Right filter */}
             <div className="w-full md:w-64">
               <div className="relative group">
@@ -254,7 +375,7 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
             </div>
           </div>
         </div>
-        
+
         {/* Content container with grid sections */}
         <div className="mt-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative animate-fadeIn">
@@ -262,34 +383,77 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
             <section className="bg-white p-6 rounded-lg shadow-lg transition-all duration-300 hover:shadow-xl overflow-hidden relative">
               {/* Rounded top border for "like" section */}
               <div className="absolute top-0 left-0 right-0 h-2 bg-green-500 rounded-t-lg"></div>
-              
+
               <div className="flex flex-wrap justify-between items-center mb-4 gap-2 pt-2">
                 <div className="flex items-center gap-2">
                   <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-800">
                     Нравится
                   </h2>
-                  <Image 
-                    src="/assets/like.png" 
-                    width={32} 
-                    height={32} 
-                    alt="Like" 
-                    className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8" 
+                  <Image
+                    src="/assets/like.png"
+                    width={32}
+                    height={32}
+                    alt="Like"
+                    className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8"
                   />
                 </div>
+
+                {/* Show add button only for profile owner */}
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingProduct(undefined)
+                      setShowLeftForm(true)
+                    }}
+                    className="cursor-pointer px-2 py-1 text-xs sm:text-sm text-white bg-[#2daa4f] rounded-md hover:bg-[#249c47] transition-colors duration-200 whitespace-nowrap transform hover:scale-105 transition-transform duration-300 flex items-center gap-1"
+                  >
+                    <PlusCircle size={16} />
+                    <span className="sm:hidden">Добавить</span>
+                    <span className="hidden sm:inline">Добавить</span>
+                  </button>
+                )}
               </div>
+
+              {/* Product form for owner */}
+              {isOwner && showLeftForm && currentUserId && (
+                <div className="mb-6 animate-slideDown">
+                  <ProductForm
+                    userId={currentUserId}
+                    product={editingProduct?.display_section === 'left' ? editingProduct : undefined}
+                    section="left"
+                    onComplete={handleFormComplete}
+                    onCancel={() => {
+                      setShowLeftForm(false)
+                      setEditingProduct(undefined)
+                    }}
+                  />
+                </div>
+              )}
 
               <div className="space-y-4">
                 {filteredLeftProducts.length > 0 ? (
                   filteredLeftProducts.map(product => (
-                    <ReadOnlyProductCard
-                      key={product.id}
-                      product={product}
-                      onTagClick={handleTagClick}
-                    />
+                    isOwner ? (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        onDelete={handleDeleteProduct}
+                        onEdit={handleEditProduct}
+                        onTagClick={handleTagClick}
+                        onImageUpdate={handleImageUpdate}
+                      />
+                    ) : (
+                      <ReadOnlyProductCard
+                        key={product.id}
+                        product={product}
+                        onTagClick={handleTagClick}
+                      />
+                    )
                   ))
                 ) : (
                   <div className="py-10 text-center text-gray-500 animate-pulse">
-                    {tagFilter ? 'Ни один интерес не соответствует вашему фильтру.' : 'Нет интересов в разделе "Нравится".'}
+                    {tagFilter ? 'Ни один интерес не соответствует вашему фильтру.' : isOwner ? 'Нет интересов в Нравится. Добавьте свой первый интерес!' : 'Нет интересов в разделе "Нравится".'}
                   </div>
                 )}
               </div>
@@ -302,34 +466,77 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
             <section className="bg-white p-6 rounded-lg shadow-lg transition-all duration-300 hover:shadow-xl overflow-hidden relative">
               {/* Rounded top border for "dislike" section */}
               <div className="absolute top-0 left-0 right-0 h-2 bg-red-500 rounded-t-lg"></div>
-              
+
               <div className="flex flex-wrap justify-between items-center mb-4 gap-2 pt-2">
                 <div className="flex items-center gap-2">
                   <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-800">
                     Не Нравится
                   </h2>
-                  <Image 
-                    src="/assets/dislike.png" 
-                    width={32} 
-                    height={32} 
-                    alt="Dislike" 
-                    className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8" 
+                  <Image
+                    src="/assets/dislike.png"
+                    width={32}
+                    height={32}
+                    alt="Dislike"
+                    className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8"
                   />
                 </div>
+
+                {/* Show add button only for profile owner */}
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingProduct(undefined)
+                      setShowRightForm(true)
+                    }}
+                    className="cursor-pointer px-2 py-1 text-xs sm:text-sm text-white bg-[#f05d4d] rounded-md hover:bg-[#e04d3e] transition-colors duration-200 whitespace-nowrap transform hover:scale-105 transition-transform duration-300 flex items-center gap-1"
+                  >
+                    <PlusCircle size={16} />
+                    <span className="sm:hidden">Добавить</span>
+                    <span className="hidden sm:inline">Добавить</span>
+                  </button>
+                )}
               </div>
+
+              {/* Product form for owner */}
+              {isOwner && showRightForm && currentUserId && (
+                <div className="mb-6 animate-slideDown">
+                  <ProductForm
+                    userId={currentUserId}
+                    product={editingProduct?.display_section === 'right' ? editingProduct : undefined}
+                    section="right"
+                    onComplete={handleFormComplete}
+                    onCancel={() => {
+                      setShowRightForm(false)
+                      setEditingProduct(undefined)
+                    }}
+                  />
+                </div>
+              )}
 
               <div className="space-y-4">
                 {filteredRightProducts.length > 0 ? (
                   filteredRightProducts.map(product => (
-                    <ReadOnlyProductCard
-                      key={product.id}
-                      product={product}
-                      onTagClick={handleTagClick}
-                    />
+                    isOwner ? (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        onDelete={handleDeleteProduct}
+                        onEdit={handleEditProduct}
+                        onTagClick={handleTagClick}
+                        onImageUpdate={handleImageUpdate}
+                      />
+                    ) : (
+                      <ReadOnlyProductCard
+                        key={product.id}
+                        product={product}
+                        onTagClick={handleTagClick}
+                      />
+                    )
                   ))
                 ) : (
                   <div className="py-10 text-center text-gray-500 animate-pulse">
-                    {tagFilter ? 'Ни один интерес не соответствует вашему фильтру.' : 'Нет интересов в разделе "Не Нравится".'}
+                    {tagFilter ? 'Ни один интерес не соответствует вашему фильтру.' : isOwner ? 'Нет интересов в Не Нравится. Добавьте свой первый интерес!' : 'Нет интересов в разделе "Не Нравится".'}
                   </div>
                 )}
               </div>

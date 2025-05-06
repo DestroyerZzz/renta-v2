@@ -20,10 +20,10 @@ interface ProductCardProps {
 export const DEFAULT_TAG = 'разное'
 const MAX_DESCRIPTION_LENGTH = 50
 
-export default function ProductCard({ 
-  product, 
-  onEdit, 
-  onDelete, 
+export default function ProductCard({
+  product,
+  onEdit,
+  onDelete,
   onTagClick,
   onImageUpdate // New prop with default to onEdit for backward compatibility
 }: ProductCardProps) {
@@ -37,32 +37,32 @@ export default function ProductCard({
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
-  
+
   // Use onImageUpdate if provided, otherwise fall back to onEdit
   const handleImageChange = onImageUpdate || onEdit;
-  
+
   useEffect(() => {
     if (product.image_url) {
       const img = new Image();
       img.src = product.image_url;
       img.onload = () => setIsImageLoaded(true);
     }
-    
+
     // Check if the current user is the author of this product
     const checkAuthor = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setIsAuthor(user?.id === product.user_id);
     };
-    
+
     checkAuthor();
-    
+
     // Add click outside listener for dropdown
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowDropdown(false);
       }
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
@@ -72,7 +72,7 @@ export default function ProductCard({
   const handleDeleteClick = () => {
     setShowDeleteConfirm(true);
   }
-  
+
   const handleDeleteConfirm = async () => {
     setIsDeleting(true)
     try {
@@ -82,12 +82,12 @@ export default function ProductCard({
           await supabase.storage.from('product_images').remove([imagePath])
         }
       }
-      
+
       await supabase
         .from('products')
         .delete()
         .eq('id', product.id)
-      
+
       onDelete(product.id)
     } catch (error) {
       console.error('Error deleting product:', error)
@@ -96,28 +96,28 @@ export default function ProductCard({
       setShowDeleteConfirm(false)
     }
   }
-  
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     setIsUploading(true);
     setUploadProgress(0);
-    
+
     try {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         throw new Error('User not authenticated');
       }
-      
+
       // Upload image to Supabase Storage with user ID in path
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${product.id}-${Date.now()}.${fileExt}`;
-      
+
       // console.log('Attempting to upload with path:', fileName);
       // console.log('Current user ID:', user.id);
-      
+
       // Simulate upload progress
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => {
@@ -128,52 +128,52 @@ export default function ProductCard({
           return prev + 10;
         });
       }, 200);
-      
+
       const { error: uploadError, data: uploadData } = await supabase.storage
         .from('product_images')
         .upload(fileName, file);
-        
+
       clearInterval(progressInterval);
       setUploadProgress(100);
-      
+
       if (uploadError) {
         console.error('Upload error details:', uploadError);
         throw new Error(`Upload error: ${uploadError.message}`);
       }
-      
+
       if (!uploadData) {
         throw new Error('Upload failed: No data returned');
       }
-      
+
       // Get public URL
       const { data: urlData } = supabase.storage
         .from('product_images')
         .getPublicUrl(fileName);
-        
+
       if (!urlData || !urlData.publicUrl) {
         throw new Error('Failed to get public URL for uploaded image');
       }
-      
+
       // Update product with image URL
       const { error: updateError } = await supabase
         .from('products')
         .update({ image_url: urlData.publicUrl })
         .eq('id', product.id);
-        
+
       if (updateError) {
         console.error('Update error:', updateError);
         throw new Error(`Update error: ${updateError.message}`);
       }
-      
+
       // Update the product in the UI by calling handleImageChange with updated product
       const updatedProduct = {
         ...product,
         image_url: urlData.publicUrl
       };
-      
+
       // Call the appropriate handler
       handleImageChange(updatedProduct);
-      
+
     } catch (error) {
       console.error('Error uploading image:', error);
       alert('Ошибка при загрузке изображения: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка'));
@@ -214,13 +214,14 @@ export default function ProductCard({
             <div className="relative w-full h-full border border-gray-200 rounded-md overflow-hidden bg-white group-hover:border-indigo-200 transition-colors duration-300">
               {product.image_url ? (
                 <div className="w-full h-full relative">
-                  <SupabaseImage 
-                    src={product.image_url} 
-                    alt={product.title || description.substring(0, 30) || 'Изображение интереса'} 
-                    className={`w-full h-full object-cover transition-all duration-500 ${
-                      isImageLoaded ? 'opacity-100' : 'opacity-0'
-                    }`}
+                  <SupabaseImage
+                    src={product.image_url}
+                    alt={product.title || description.substring(0, 30) || 'Изображение интереса'}
+                    className={`w-full h-full object-cover transition-all duration-500 ${isImageLoaded ? 'opacity-100' : 'opacity-0'
+                      }`}
                     fill={true}
+                    quality={75}
+                    priority={false}
                     fallback={
                       <div className="w-full h-full flex items-center justify-center bg-gray-100 animate-pulse">
                         <p className="text-gray-500 text-xs sm:text-sm">Ошибка загрузки</p>
@@ -240,15 +241,15 @@ export default function ProductCard({
                           </p>
                           {uploadProgress > 0 && (
                             <div className="w-4/5 mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-[#3d82f7] transition-all duration-200" 
-                                style={{ width: `${uploadProgress}%` }} 
+                              <div
+                                className="h-full bg-[#3d82f7] transition-all duration-200"
+                                style={{ width: `${uploadProgress}%` }}
                               />
                             </div>
                           )}
                         </div>
                       ) : (
-                        <label 
+                        <label
                           htmlFor={`image-upload-${product.id}`}
                           className="cursor-pointer flex flex-col items-center justify-center w-full h-full"
                         >
@@ -256,10 +257,10 @@ export default function ProductCard({
                           <p className="text-gray-500 text-xs sm:text-sm group-hover:text-[#3d82f7] transition-colors duration-300">
                             Добавить фото
                           </p>
-                          <input 
+                          <input
                             id={`image-upload-${product.id}`}
-                            type="file" 
-                            accept="image/*" 
+                            type="file"
+                            accept="image/*"
                             onChange={handleImageUpload}
                             disabled={isUploading}
                             className="hidden"
@@ -274,20 +275,21 @@ export default function ProductCard({
               )}
             </div>
           </div>
-          
+
           {/* Right side - Content */}
           <div className="p-2 sm:p-3 md:p-4 flex-1 flex flex-col min-w-0 relative">
             {/* Action dropdown menu - only visible for authors */}
             {isAuthor && (
               <div className="absolute top-2 right-2 z-10" ref={dropdownRef}>
-                <button 
+                <button
+                  type="button"
                   onClick={() => setShowDropdown(!showDropdown)}
                   className="p-1.5 rounded-full hover:bg-gray-100 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer"
                   aria-label="Действия с интересом"
                 >
                   <MoreVertical size={18} className="text-gray-500 hover:text-[#3d82f7]" />
                 </button>
-                
+
                 {showDropdown && (
                   <div className="absolute right-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-100 z-20 w-[160px] py-1 overflow-hidden">
                     <button
@@ -317,24 +319,23 @@ export default function ProductCard({
                 )}
               </div>
             )}
-            
+
             {/* Title */}
             {product.title && (
               <h3 className="font-medium text-gray-800 text-xs sm:text-sm md:text-base mb-1 break-words line-clamp-2">
                 {product.title}
               </h3>
             )}
-            
+
             {/* Description */}
             <div className="mb-2 sm:mb-3 flex-grow">
-              <p className={`text-gray-700 text-xs sm:text-sm md:text-base break-words transition-all duration-300 ${
-                !showFullDescription ? 'line-clamp-2 sm:line-clamp-2' : ''
-              } group-hover:text-gray-900`}>
+              <p className={`text-gray-700 text-xs sm:text-sm md:text-base break-words transition-all duration-300 ${!showFullDescription ? 'line-clamp-2 sm:line-clamp-2' : ''
+                } group-hover:text-gray-900`}>
                 {description}
               </p>
-              
+
               {isDescriptionLong && (
-                <button 
+                <button
                   type="button"
                   onClick={() => setShowFullDescription(!showFullDescription)}
                   className="cursor-pointer text-xs text-[#3d82f7] hover:text-[#2d6ce0] mt-1 transition-all duration-200 hover:underline focus:outline-none"
@@ -343,7 +344,7 @@ export default function ProductCard({
                 </button>
               )}
             </div>
-            
+
             {/* Tag and date */}
             <div className="flex justify-between items-center py-1 sm:py-2 border-t border-gray-100 group-hover:border-indigo-50 transition-colors duration-300">
               <button
@@ -355,13 +356,17 @@ export default function ProductCard({
                 <span className="md:inline">{`#${getDisplayTag()}`}</span>
               </button>
               <div className="text-xs text-gray-500 group-hover:text-gray-700 transition-colors duration-300">
-                {new Date(product.created_at).toLocaleDateString()}
+                {new Date(product.created_at).toLocaleDateString('ru-RU', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric'
+                }).replace(/\//g, '.')}
               </div>
             </div>
           </div>
         </div>
       </div>
-      
+
       {showDeleteConfirm && (
         <ConfirmationDialog
           title="Удаление интереса"

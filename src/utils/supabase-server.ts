@@ -5,7 +5,7 @@ import { SUPABASE_CONFIG } from './supabase-config'
 
 export async function createClient() {
   const cookieStore = await cookies()
-  
+
   return createServerClient(
     SUPABASE_CONFIG.url,
     SUPABASE_CONFIG.anonKey,
@@ -20,13 +20,7 @@ export async function createClient() {
         remove(name: string, options: CookieOptions) {
           cookieStore.set({ name, value: '', ...options })
         },
-      },
-      global: {
-        headers: {
-          apikey: SUPABASE_CONFIG.anonKey,
-          'Content-Type': 'application/json',
-        },
-      },
+      }
     }
   )
 }

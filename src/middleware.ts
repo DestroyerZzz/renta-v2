@@ -5,6 +5,7 @@ import type { CookieOptions } from '@supabase/ssr'
 import { SUPABASE_CONFIG } from './utils/supabase-config'
 
 export async function middleware(request: NextRequest) {
+  // Create a response early
   const response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -42,16 +43,16 @@ export async function middleware(request: NextRequest) {
 
     // Get session to check if user is logged in
     const { data: { session } } = await supabase.auth.getSession()
-    
+
     // Use getUser() which verifies with the Auth server for secure user data
     const { data: { user } } = session ? await supabase.auth.getUser() : { data: { user: null } }
-    
+
     const isAuthenticated = !!session && !!user
     const userId = user?.id
 
     // Define route types
-    const isAuthRoute = request.nextUrl.pathname.startsWith('/login') || 
-                       request.nextUrl.pathname.startsWith('/signup')
+    const isAuthRoute = request.nextUrl.pathname.startsWith('/login') ||
+      request.nextUrl.pathname.startsWith('/signup')
     const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard')
     const isPublicProfileRoute = request.nextUrl.pathname.startsWith('/profile/')
 
@@ -64,7 +65,7 @@ export async function middleware(request: NextRequest) {
     if (isPublicProfileRoute) {
       // Extract the profile identifier (can be username or userId)
       const profileIdentifier = request.nextUrl.pathname.split('/')[2]
-      
+
       if (profileIdentifier) {
         try {
           // First try to find profile by username
@@ -73,27 +74,27 @@ export async function middleware(request: NextRequest) {
             .select('id')
             .eq('username', profileIdentifier)
             .single()
-            
+
           if (profileByUsername) {
             // If we found a profile by username, set the user ID in the request headers
             response.headers.set('x-profile-id', profileByUsername.id)
             response.headers.set('x-profile-type', 'username')
             return response
           }
-          
+
           // If not found by username, try to find by user ID
           const { data: profileById } = await supabase
             .from('profiles')
             .select('id, username')
             .eq('id', profileIdentifier)
             .single()
-            
+
           if (profileById) {
             // If user has a username, redirect to the username-based URL
             if (profileById.username) {
               return NextResponse.redirect(new URL(`/profile/${profileById.username}`, request.url))
             }
-            
+
             // Otherwise just set the user ID in the request headers
             response.headers.set('x-profile-id', profileById.id)
             response.headers.set('x-profile-type', 'userId')
@@ -103,7 +104,7 @@ export async function middleware(request: NextRequest) {
           console.error('Error in profile lookup middleware:', e)
         }
       }
-      
+
       // If we reach here, we couldn't find a valid profile
       // We'll continue to the profile page which can handle displaying a "not found" state
       return response
