@@ -22,7 +22,6 @@ export async function middleware(request: NextRequest) {
             return request.cookies.get(name)?.value
           },
           set(name: string, value: string, options: CookieOptions) {
-            // Use response.cookies instead of request.cookies for setting cookies
             response.cookies.set({
               name,
               value,
@@ -30,7 +29,6 @@ export async function middleware(request: NextRequest) {
             })
           },
           remove(name: string, options: CookieOptions) {
-            // Use response.cookies instead of request.cookies for removing cookies
             response.cookies.set({
               name,
               value: '',
@@ -41,10 +39,7 @@ export async function middleware(request: NextRequest) {
       }
     )
 
-    // Get session to check if user is logged in
     const { data: { session } } = await supabase.auth.getSession()
-
-    // Use getUser() which verifies with the Auth server for secure user data
     const { data: { user } } = session ? await supabase.auth.getUser() : { data: { user: null } }
 
     const isAuthenticated = !!session && !!user
@@ -53,12 +48,19 @@ export async function middleware(request: NextRequest) {
     // Define route types
     const isAuthRoute = request.nextUrl.pathname.startsWith('/login') ||
       request.nextUrl.pathname.startsWith('/signup')
-    const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard')
+    const isProtectedRoute = request.nextUrl.pathname.includes('/edit_profile')
     const isPublicProfileRoute = request.nextUrl.pathname.startsWith('/profile/')
 
-    // If accessing home page while authenticated, redirect to dashboard
+    // If accessing home page while authenticated, redirect to profile page
     if (isAuthenticated && request.nextUrl.pathname === '/') {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', userId)
+        .single()
+
+      const redirectPath = profile?.username ? `/profile/${profile.username}` : `/profile/${userId}`
+      return NextResponse.redirect(new URL(redirectPath, request.url))
     }
 
     // Handle public profile routes - support for both username and userId lookups
@@ -105,8 +107,6 @@ export async function middleware(request: NextRequest) {
         }
       }
 
-      // If we reach here, we couldn't find a valid profile
-      // We'll continue to the profile page which can handle displaying a "not found" state
       return response
     }
 
@@ -117,9 +117,16 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(redirectUrl)
     }
 
-    // If user is authenticated and trying to access auth pages, redirect to dashboard
+    // If user is authenticated and trying to access auth pages, redirect to their profile
     if (isAuthenticated && isAuthRoute) {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', userId)
+        .single()
+
+      const redirectPath = profile?.username ? `/profile/${profile.username}` : `/profile/${userId}`
+      return NextResponse.redirect(new URL(redirectPath, request.url))
     }
 
     // Add user information to request headers for server components
@@ -130,13 +137,15 @@ export async function middleware(request: NextRequest) {
     return response
   } catch (e) {
     console.error('Middleware error:', e)
-    if (request.nextUrl.pathname.startsWith('/dashboard')) {
-      return NextResponse.redirect(new URL('/login?error=auth_error', request.url))
+    if (request.nextUrl.pathname.includes('/edit_profile')) {
+      const redirectUrl = new URL('/login', request.url)
+      redirectUrl.searchParams.set('redirectTo', request.nextUrl.pathname)
+      return NextResponse.redirect(redirectUrl)
     }
     return response
   }
 }
 
 export const config = {
-  matcher: ['/', '/dashboard/:path*', '/login', '/signup', '/profile/:path*'],
+  matcher: ['/', '/login', '/signup', '/profile/:path*'],
 }

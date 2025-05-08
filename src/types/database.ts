@@ -15,6 +15,7 @@ export interface Database {
           full_name: string | null
           avatar_url: string | null
           cover_image_url: string | null
+          bio: string | null
           updated_at: string | null
           created_at: string
           username: string | null
@@ -24,6 +25,7 @@ export interface Database {
           full_name?: string | null
           avatar_url?: string | null
           cover_image_url?: string | null
+          bio?: string | null
           updated_at?: string | null
           created_at?: string
           username?: string | null
@@ -33,6 +35,7 @@ export interface Database {
           full_name?: string | null
           avatar_url?: string | null
           cover_image_url?: string | null
+          bio?: string | null
           updated_at?: string | null
           created_at?: string
           username?: string | null
@@ -68,6 +71,38 @@ export interface Database {
           description?: string | null
           tag?: string | null
           display_section?: 'left' | 'right'
+        }
+      }
+      posts: {
+        Row: {
+          id: string
+          user_id: string
+          content: string
+          image_url: string | null
+          created_at: string
+          updated_at: string
+          original_post_id: string | null
+          is_shared: boolean | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          content: string
+          image_url?: string | null
+          created_at?: string
+          updated_at?: string
+          original_post_id?: string | null
+          is_shared?: boolean | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          content?: string
+          image_url?: string | null
+          created_at?: string
+          updated_at?: string
+          original_post_id?: string | null
+          is_shared?: boolean | null
         }
       }
     }

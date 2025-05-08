@@ -6,7 +6,6 @@ import PublicProfileContent from '@/components/profile/PublicProfileContent'
 import { createClient } from '@/utils/supabase'
 
 export default function PublicProfilePage() {
-  // Use client-side params hook instead of server component params
   const params = useParams()
   const router = useRouter()
   const supabase = createClient()
@@ -17,7 +16,6 @@ export default function PublicProfilePage() {
   // This can be either a userId or a username
   const profileIdentifier = params.userId as string
 
-  // Determine if we're dealing with a userId or username, and get the actual userId
   useEffect(() => {
     const resolveProfileIdentifier = async () => {
       try {
@@ -31,7 +29,6 @@ export default function PublicProfilePage() {
           .maybeSingle()
 
         if (profileByUsername) {
-          // If found by username, use that user ID
           setActualUserId(profileByUsername.id)
           return
         }
@@ -49,8 +46,6 @@ export default function PublicProfilePage() {
             router.replace(`/profile/${profileById.username}`)
             return
           }
-
-          // Otherwise just use the user ID
           setActualUserId(profileById.id)
           return
         }
@@ -92,7 +87,7 @@ export default function PublicProfilePage() {
   return (
     <Suspense fallback={
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-gray-600">Загрузка...</div>
+        <div className="text-lg text-gray-600">Загрузка интересов...</div>
       </div>
     }>
       {actualUserId && <PublicProfileContent userId={actualUserId} />}

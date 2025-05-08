@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase'
 import Link from 'next/link'
 import { Mail, Lock } from 'lucide-react'
@@ -12,6 +12,7 @@ export default function SignIn() {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -20,18 +21,36 @@ export default function SignIn() {
     setError(null)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
-      if (error) {
-        setError(error.message)
+      if (signInError) {
+        setError(signInError.message)
         return
       }
 
-      router.push('/dashboard')
-      router.refresh()
+      if (signInData.user) {
+        // Check for redirectTo parameter
+        const redirectTo = searchParams.get('redirectTo')
+
+        if (redirectTo) {
+          // If we have a redirectTo URL, use it
+          router.push(redirectTo)
+        } else {
+          // Otherwise, get user's profile and redirect to their profile page
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('username')
+            .eq('id', signInData.user.id)
+            .single()
+
+          const redirectPath = profile?.username ? `/profile/${profile.username}` : `/profile/${signInData.user.id}`
+          router.push(redirectPath)
+        }
+        router.refresh()
+      }
     } catch (error) {
       setError('An unexpected error occurred')
       console.error('Sign in error:', error)
@@ -49,13 +68,13 @@ export default function SignIn() {
             Добро пожаловать обратно! Войдите в свой аккаунт
           </p>
         </div>
-        
+
         {error && (
           <div className="p-3 text-sm text-red-600 bg-red-100 rounded-md">
             {error}
           </div>
         )}
-        
+
         <form className="mt-8 space-y-6" onSubmit={handleSignIn}>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">
@@ -77,7 +96,7 @@ export default function SignIn() {
               />
             </div>
           </div>
-          
+
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700">
               Пароль
@@ -98,7 +117,7 @@ export default function SignIn() {
               />
             </div>
           </div>
-          
+
           <div>
             <button
               type="submit"
@@ -109,7 +128,7 @@ export default function SignIn() {
             </button>
           </div>
         </form>
-        
+
         <div className="text-center mt-4">
           <p className="text-sm text-gray-600">
             У вас нет учетной записи?{' '}

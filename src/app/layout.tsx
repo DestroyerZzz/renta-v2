@@ -13,7 +13,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "Product Dashboard",
   description: "A product management dashboard built with Next.js and Supabase By DR-Ninja",
-  keywords: ["интересы", "панель приборов", "управление"," инвентарь", "управление интересами"],
+  keywords: ["интересы", "панель приборов", "управление", " инвентарь", "управление интересами"],
   authors: [{ name: "Mohamed Foad & Mr.Lahony" }],
   creator: "Mohamed Foad & Mr.Lahony",
   publisher: "Dr-Ninja",

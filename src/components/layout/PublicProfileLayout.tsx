@@ -46,7 +46,7 @@ export default function PublicProfileLayout({ children }: { children: React.Reac
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="top-0 left-0 right-0 z-10 bg-white shadow-sm transition-all duration-300">
+      <nav className="bg-white shadow-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
           <div className="relative flex items-center justify-between h-16">
             <div className="flex items-center sm:hidden">
@@ -90,7 +90,7 @@ export default function PublicProfileLayout({ children }: { children: React.Reac
                 {isAuthenticated ? (
                   <>
                     <Link
-                      href="/dashboard/profile"
+                      href="/edit_profile"
                       className="px-3 py-2 text-sm font-medium rounded-md flex items-center space-x-2 text-[#3d82f7] hover:text-[#2d6ce0] hover:bg-gray-200 transition-colors duration-300"
                     >
                       <Settings className="w-4 h-4" />
@@ -146,7 +146,7 @@ export default function PublicProfileLayout({ children }: { children: React.Reac
             {isAuthenticated ? (
               <>
                 <Link
-                  href="/dashboard/profile"
+                  href="/edit_profile"
                   onClick={() => setMobileMenuOpen(false)}
                   className="block w-full text-left px-3 py-3 text-base font-medium rounded-md flex items-center space-x-3 text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-colors duration-300"
                 >
@@ -189,7 +189,7 @@ export default function PublicProfileLayout({ children }: { children: React.Reac
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 pt-6">
+      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {children}
       </main>
     </div>

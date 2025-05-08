@@ -18,8 +18,11 @@
 /out/
 
 # production
+.next
+.qodo
 /build
 features.md
+tasks.md
 # misc
 .DS_Store
 *.pem
