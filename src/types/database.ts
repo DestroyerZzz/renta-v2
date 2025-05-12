@@ -41,6 +41,58 @@ export interface Database {
           username?: string | null
         }
       }
+      follows: {
+        Row: {
+          id: string
+          follower_id: string
+          following_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          follower_id: string
+          following_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          follower_id?: string
+          following_id?: string
+          created_at?: string
+        }
+      }
+      notifications: {
+        Row: {
+          id: string
+          receiver_id: string
+          sender_id: string
+          type: string
+          content: string | null
+          entity_id: string | null
+          read: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          receiver_id: string
+          sender_id: string
+          type: string
+          content?: string | null
+          entity_id?: string | null
+          read?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          receiver_id?: string
+          sender_id?: string
+          type?: string
+          content?: string | null
+          entity_id?: string | null
+          read?: boolean
+          created_at?: string
+        }
+      }
       products: {
         Row: {
           id: string

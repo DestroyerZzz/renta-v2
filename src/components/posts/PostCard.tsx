@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import SupabaseImage from '@/components/ui/SupabaseImage'
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog'
-import PostShareDialog from '@/components/ui/PostShareDialog'
 import { formatDistanceToNow } from 'date-fns'
 import { ru } from 'date-fns/locale'
-import { Edit2, Trash2, MessageCircle, Share } from 'lucide-react'
+import { Edit2, Trash2, MessageCircle, Share, Copy, Check } from 'lucide-react'
+import toast from 'react-hot-toast'
 
 export interface Post {
     id: string
@@ -25,7 +25,41 @@ interface PostCardProps {
 
 export default function PostCard({ post, isOwner, onEdit, onDelete }: PostCardProps) {
     const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-    const [showShareDialog, setShowShareDialog] = useState(false)
+    const [isHighlighted, setIsHighlighted] = useState(false)
+    const [isCopied, setIsCopied] = useState(false)
+
+    // Check if this post should be highlighted based on URL fragment
+    useEffect(() => {
+        // Check if the URL fragment targets this post
+        if (typeof window !== 'undefined') {
+            const hash = window.location.hash
+            const postFragment = `#post-${post.id}`
+
+            if (hash === postFragment) {
+                // Apply highlight effect
+                setIsHighlighted(true)
+
+                // Scroll into view
+                const element = document.getElementById(`post-${post.id}`)
+                if (element) {
+                    // Use a small delay to ensure the DOM is ready
+                    setTimeout(() => {
+                        element.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center'
+                        })
+                    }, 100)
+                }
+
+                // Remove highlight after 4 seconds
+                const timer = setTimeout(() => {
+                    setIsHighlighted(false)
+                }, 4000)
+
+                return () => clearTimeout(timer)
+            }
+        }
+    }, [post.id])
 
     const handleDelete = async () => {
         if (onDelete) {
@@ -37,7 +71,26 @@ export default function PostCard({ post, isOwner, onEdit, onDelete }: PostCardPr
     const handleShareClick = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        setShowShareDialog(true);
+
+        // Generate shareable URL with fragment
+        const postFragment = `#post-${post.id}`;
+        const shareUrl = `${window.location.origin}${window.location.pathname}${postFragment}`;
+
+        // Copy to clipboard
+        navigator.clipboard.writeText(shareUrl)
+            .then(() => {
+                setIsCopied(true);
+                toast.success('Ссылка скопирована в буфер обмена');
+
+                // Reset copy icon after 2 seconds
+                setTimeout(() => {
+                    setIsCopied(false);
+                }, 2000);
+            })
+            .catch(err => {
+                console.error('Failed to copy URL:', err);
+                toast.error('Не удалось скопировать ссылку');
+            });
     };
 
     // Format timestamp for better readability
@@ -49,9 +102,13 @@ export default function PostCard({ post, isOwner, onEdit, onDelete }: PostCardPr
     const isSharedPost = Boolean(post.is_shared && post.original_post_id)
 
     return (
-        <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden">
+        <div
+            className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden ${isHighlighted ? 'ring-4 ring-blue-500' : ''
+                }`}
+            id={`post-${post.id}`}
+        >
             {/* Post content area */}
-            <div className="p-6">
+            <div className={`p-6 ${isHighlighted ? 'bg-blue-50 transition-colors duration-1000' : ''}`}>
                 {/* If this is a shared post, display differently */}
                 {isSharedPost && (
                     <div className="mb-4 text-xs text-gray-500 flex items-center">
@@ -96,10 +153,19 @@ export default function PostCard({ post, isOwner, onEdit, onDelete }: PostCardPr
                         <button
                             onClick={handleShareClick}
                             className="cursor-pointer flex items-center text-gray-500 hover:text-[#3d82f7] transition-colors duration-200"
-                            title="Поделиться постом"
+                            title="Скопировать ссылку на пост"
                         >
-                            <Share size={16} className="mr-1" />
-                            <span className="hidden sm:inline">Поделиться</span>
+                            {isCopied ? (
+                                <>
+                                    <Check size={16} className="mr-1 text-green-500" />
+                                    <span className="hidden sm:inline">Скопировано</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Copy size={16} className="mr-1" />
+                                    <span className="hidden sm:inline">Копировать ссылку</span>
+                                </>
+                            )}
                         </button>
                     )}
 
@@ -136,17 +202,6 @@ export default function PostCard({ post, isOwner, onEdit, onDelete }: PostCardPr
                 confirmText="Удалить"
                 cancelText="Отмена"
             />
-
-            {/* Share dialog */}
-            {showShareDialog && (
-                <PostShareDialog
-                    isOpen={showShareDialog}
-                    onClose={() => setShowShareDialog(false)}
-                    postId={post.id}
-                    postContent={post.content}
-                    postImageUrl={post.image_url}
-                />
-            )}
         </div>
     )
 }

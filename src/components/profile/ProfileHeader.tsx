@@ -1,11 +1,14 @@
+
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { createClient } from '@/utils/supabase'
 import SupabaseImage from '@/components/ui/SupabaseImage'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Search } from 'lucide-react'
+import FollowButton from './FollowButton'
+import FollowStats from './FollowStats'
 
 interface ProfileHeaderProps {
   userId: string
@@ -23,19 +26,51 @@ export default function ProfileHeader({ userId, tagFilter = '', onTagFilterChang
   const [totalInterests, setTotalInterests] = useState(0)
   const [totalPosts, setTotalPosts] = useState(0)
   const [localTagFilter, setLocalTagFilter] = useState(tagFilter)
-  const pathname = usePathname()
-  const supabase = createClient()
 
-  // Update local tag filter when prop changes
+  // Add for router navigation
+  const pathname = usePathname()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const supabase = createClient()
+  const [, startTransition] = useTransition();
+
+  // Ensure the local state tracks the prop
   useEffect(() => {
     setLocalTagFilter(tagFilter)
   }, [tagFilter])
 
-  // Handle tag filter change
+  // When the URL changes, notify parent (if needed)
+  useEffect(() => {
+    const tagFromSearch = searchParams.get('tag') || ''
+    setLocalTagFilter(tagFromSearch)
+    if (onTagFilterChange) {
+      onTagFilterChange(tagFromSearch)
+    }
+    // Only run on search param changes (not just mount)
+  }, [searchParams, onTagFilterChange])
+
+  // Handle tag filter change - updates URL in place!
   const handleTagFilterChange = (value: string) => {
     setLocalTagFilter(value)
+    // If parent wants to know instantly, notify
     if (onTagFilterChange) {
       onTagFilterChange(value)
+    }
+    // Update the URL query params using the router
+    try {
+      startTransition(() => {
+        const nextParams = new URLSearchParams(Array.from(searchParams.entries()))
+        if (value) {
+          nextParams.set('tag', value)
+        } else {
+          nextParams.delete('tag')
+        }
+        // Push new URL (shallow, no reload, shareable)
+        router.push(`${pathname}${nextParams.size ? `?${nextParams}` : ''}`)
+      })
+    } catch (err) {
+      // Log error with context as per guideline
+      console.error('Failed to update tag filter in URL', { value, err })
     }
   }
 
@@ -126,7 +161,7 @@ export default function ProfileHeader({ userId, tagFilter = '', onTagFilterChang
   const isBioPage = pathname?.includes('/bio');
 
   return (
-    <div className="pb-4">
+    <div className="">
       {/* Full-width container matched to grid sections */}
       <div className="max-w-7xl mx-auto px-4">
         {/* Cover image section */}
@@ -144,9 +179,7 @@ export default function ProfileHeader({ userId, tagFilter = '', onTagFilterChang
             />
           ) : (
             <div className="w-full h-full bg-gradient-to-r from-[#3d82f7] to-purple-600 rounded-lg"></div>
-          )}
-
-          {/* Centered avatar and username with text shadow */}
+          )}          {/* Centered avatar and username with text shadow */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <div className="relative w-[130px] h-[130px] rounded-full overflow-hidden bg-white p-1 shadow-lg mb-4">
               {avatarUrl ? (
@@ -166,12 +199,16 @@ export default function ProfileHeader({ userId, tagFilter = '', onTagFilterChang
                 <div className="w-full h-full flex items-center justify-center bg-indigo-200 text-indigo-600 text-2xl font-bold rounded-full">
                   {userName?.charAt(0)?.toUpperCase() || 'U'}
                 </div>
-              )}
-            </div>
+              )}            </div>
             <h2 className="font-medium text-xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">{userName}</h2>
+            <FollowStats
+              userId={userId}
+              username={username || undefined}
+              className="text-white drop-shadow-[0_1px_2px_rgba(0,0,0,1)] mt-1"
+            />
+            {!isOwner && <FollowButton targetUserId={userId} className="mt-2" />}
           </div>
         </div>
-
         {/* Navigation and filter section - aligned with grid */}
         <div className="bg-white shadow py-4 px-4 sticky top-16 z-10 rounded-b-lg mb-8">
           <div className="flex flex-col md:flex-row items-center justify-between">
@@ -242,8 +279,7 @@ export default function ProfileHeader({ userId, tagFilter = '', onTagFilterChang
                     className={`text-gray-600 hover:text-[#3d82f7] transition-colors duration-200 font-medium relative group ${isBioPage ? 'text-gray-800' : ''}`}
                   >
                     <span>Био</span>
-                    <span className={`absolute -bottom-4 left-0 w-full h-1 bg-[#3d82f7] transform ${isBioPage ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'} transition-transform duration-200`}></span>
-                  </Link>
+                    <span className={`absolute -bottom-4 left-0 w-full h-1 bg-[#3d82f7] transform ${isBioPage ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'} transition-transform duration-200`}></span>                  </Link>
                 </>
               )}
             </div>
