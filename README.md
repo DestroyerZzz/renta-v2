@@ -37,7 +37,7 @@ A modern, responsive web application built with Next.js and Supabase that helps 
 1. Clone this repository:
 
 ```bash
-git clone https://github.com/yourusername/open-mind.git
+git clone https://github.com/ninja225/open-mind.git
 cd open-mind
 ```
 

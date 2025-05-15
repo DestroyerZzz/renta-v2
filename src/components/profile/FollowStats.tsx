@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase'
 import { UserPlus, Users } from 'lucide-react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
 interface FollowStatsProps {
     userId: string
@@ -20,9 +21,12 @@ export default function FollowStats({ userId, username, className = '' }: Follow
     const [counts, setCounts] = useState<FollowCounts>({ followers: 0, following: 0 })
     const [isLoading, setIsLoading] = useState(true)
     const supabase = createClient()
+    const pathname = usePathname()
 
     // Create the base path for profile links
     const baseProfilePath = username ? `/profile/${username}` : `/profile/${userId}`
+    const isFollowersPage = pathname === `${baseProfilePath}/followers`
+    const isFollowingPage = pathname === `${baseProfilePath}/following`
 
     useEffect(() => {
         const fetchFollowCounts = async () => {
@@ -68,15 +72,23 @@ export default function FollowStats({ userId, username, className = '' }: Follow
         )
     } return (
         <div className={`flex gap-6 text-sm font-medium ${className}`}>
-            <Link href={`${baseProfilePath}/followers`} className="flex items-center gap-1 hover:text-blue-600 transition-colors">
+            <Link
+                href={`${baseProfilePath}/followers`}
+                className={`text-gray-600 hover:text-[#3d82f7] transition-colors duration-200 font-medium relative group flex items-center gap-1 ${isFollowersPage ? 'text-gray-800' : ''}`}
+            >
                 <Users size={14} />
                 <span className="font-bold">{counts.followers}</span>
                 <span>{counts.followers === 1 ? 'Подписчик' : 'Подписчики'}</span>
+                <span className={`absolute -bottom-4 left-0 w-full h-1 bg-[#3d82f7] transform ${isFollowersPage ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'} transition-transform duration-200`}></span>
             </Link>
-            <Link href={`${baseProfilePath}/following`} className="flex items-center gap-1 hover:text-blue-600 transition-colors">
+            <Link
+                href={`${baseProfilePath}/following`}
+                className={`text-gray-600 hover:text-[#3d82f7] transition-colors duration-200 font-medium relative group flex items-center gap-1 ${isFollowingPage ? 'text-gray-800' : ''}`}
+            >
                 <UserPlus size={14} />
                 <span className="font-bold">{counts.following}</span>
                 <span>Подписки</span>
+                <span className={`absolute -bottom-4 left-0 w-full h-1 bg-[#3d82f7] transform ${isFollowingPage ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'} transition-transform duration-200`}></span>
             </Link>
         </div>
     )

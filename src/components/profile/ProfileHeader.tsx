@@ -199,21 +199,14 @@ export default function ProfileHeader({ userId, tagFilter = '', onTagFilterChang
                 <div className="w-full h-full flex items-center justify-center bg-indigo-200 text-indigo-600 text-2xl font-bold rounded-full">
                   {userName?.charAt(0)?.toUpperCase() || 'U'}
                 </div>
-              )}            </div>
-            <h2 className="font-medium text-xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">{userName}</h2>
-            <FollowStats
-              userId={userId}
-              username={username || undefined}
-              className="text-white drop-shadow-[0_1px_2px_rgba(0,0,0,1)] mt-1"
-            />
+              )}            </div>            <h2 className="font-medium text-xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">{userName}</h2>
             {!isOwner && <FollowButton targetUserId={userId} className="mt-2" />}
           </div>
         </div>
         {/* Navigation and filter section - aligned with grid */}
         <div className="bg-white shadow py-4 px-4 sticky top-16 z-10 rounded-b-lg mb-8">
           <div className="flex flex-col md:flex-row items-center justify-between">
-            {/* Profile navigation tabs */}
-            <div className="pl-0 md:pl-4 flex space-x-6 mb-4 md:mb-0">
+            {/* Profile navigation tabs */}            <div className="pl-0 md:pl-4 flex items-center space-x-6 mb-4 md:mb-0">
               {isOwner ? (
                 <>
                   <Link
@@ -242,11 +235,16 @@ export default function ProfileHeader({ userId, tagFilter = '', onTagFilterChang
                   </Link>
                   <Link
                     href={`${profileUrl}/bio`}
-                    className={`text-gray-600 hover:text-[#3d82f7] transition-colors duration-200 font-medium relative group ${isBioPage ? 'text-gray-800' : ''}`}
-                  >
+                    className={`text-gray-600 hover:text-[#3d82f7] transition-colors duration-200 font-medium relative group ${isBioPage ? 'text-gray-800' : ''}`}                  >
                     <span>Био</span>
                     <span className={`absolute -bottom-4 left-0 w-full h-1 bg-[#3d82f7] transform ${isBioPage ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'} transition-transform duration-200`}></span>
                   </Link>
+                  <div className="border-l border-gray-200 h-6 mx-2" />
+                  <FollowStats
+                    userId={userId}
+                    username={username || undefined}
+                    className="text-gray-600"
+                  />
                 </>
               ) : (
                 <>
@@ -276,10 +274,16 @@ export default function ProfileHeader({ userId, tagFilter = '', onTagFilterChang
                   </Link>
                   <Link
                     href={`${profileUrl}/bio`}
-                    className={`text-gray-600 hover:text-[#3d82f7] transition-colors duration-200 font-medium relative group ${isBioPage ? 'text-gray-800' : ''}`}
-                  >
+                    className={`text-gray-600 hover:text-[#3d82f7] transition-colors duration-200 font-medium relative group ${isBioPage ? 'text-gray-800' : ''}`}                  >
                     <span>Био</span>
-                    <span className={`absolute -bottom-4 left-0 w-full h-1 bg-[#3d82f7] transform ${isBioPage ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'} transition-transform duration-200`}></span>                  </Link>
+                    <span className={`absolute -bottom-4 left-0 w-full h-1 bg-[#3d82f7] transform ${isBioPage ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'} transition-transform duration-200`}></span>
+                  </Link>
+                  <div className="border-l border-gray-200 h-6 mx-2" />
+                  <FollowStats
+                    userId={userId}
+                    username={username || undefined}
+                    className="text-gray-600"
+                  />
                 </>
               )}
             </div>

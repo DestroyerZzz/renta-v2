@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -7,7 +6,7 @@ import Link from 'next/link'
 import SupabaseImage from '@/components/ui/SupabaseImage'
 import { formatDistanceToNow } from 'date-fns'
 import { ru } from 'date-fns/locale'
-import { Bell, Check, UserPlus, FileText, Star } from 'lucide-react'
+import { Bell, Check, UserPlus, FileText, ThumbsUp, ThumbsDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import FollowButton from '@/components/profile/FollowButton'
 
@@ -16,6 +15,12 @@ interface Profile {
     full_name: string | null
     username: string | null
     avatar_url: string | null
+}
+
+interface Interest {
+    id: string
+    title: string
+    display_section: 'left' | 'right'
 }
 
 interface Notification {
@@ -28,6 +33,8 @@ interface Notification {
     entity_id: string | null
     read: boolean
     created_at: string
+    interest?: Interest | null
+    is_like?: boolean
 }
 
 // Create supabase client OUTSIDE the component so it's referentially stable
@@ -70,8 +77,7 @@ export default function NotificationsContent() {
                     return
                 }
 
-                // Fix join: bring in sender as a single object, not an array (Supabase .select expands links if not pluralized)
-                const { data, error } = await supabase
+                const { data: initialData, error } = await supabase
                     .from('notifications')
                     .select(`
                         *,
@@ -88,9 +94,36 @@ export default function NotificationsContent() {
 
                 if (error) throw error
 
-                if (data) {
-                    // If "sender" is still an array, flatten it; otherwise use as object
-                    const formattedData = data.map(item => ({
+                // Fetch interest details for 'interest' type notifications
+                if (initialData) {
+                    let processedData = [...initialData] as Notification[]
+                    const interestNotifications = processedData.filter(
+                        (n: Notification) => n.type === 'interest' && n.entity_id
+                    )
+
+                    if (interestNotifications.length > 0) {
+                        const { data: interests, error: interestError } = await supabase
+                            .from('products')
+                            .select('id, title, display_section')
+                            .in('id', interestNotifications.map(n => n.entity_id))
+
+                        if (interestError) throw interestError
+
+                        // Map interests to notifications
+                        processedData = processedData.map((notification: Notification) => {
+                            if (notification.type === 'interest' && notification.entity_id) {
+                                const interest = interests?.find(i => i.id === notification.entity_id)
+                                return {
+                                    ...notification,
+                                    interest: interest || null,
+                                    is_like: interest?.display_section === 'left'
+                                }
+                            }
+                            return notification
+                        })
+                    }
+
+                    const formattedData = processedData.map(item => ({
                         ...item,
                         sender: Array.isArray(item.sender)
                             ? (item.sender[0] || { id: '', full_name: null, username: null, avatar_url: null })
@@ -124,14 +157,17 @@ export default function NotificationsContent() {
     }, [])
 
     // Helpers
-    const getNotificationIcon = (type: string) => {
+    const getNotificationIcon = (type: string, isLike?: boolean) => {
         switch (type) {
             case 'follow': return <UserPlus className="w-5 h-5 text-blue-500" />
             case 'post': return <FileText className="w-5 h-5 text-green-500" />
-            case 'interest': return <Star className="w-5 h-5 text-yellow-500" />
+            case 'interest': return isLike ?
+                <ThumbsUp className="w-5 h-5 text-green-500" /> :
+                <ThumbsDown className="w-5 h-5 text-red-500" />
             default: return <Bell className="w-5 h-5 text-gray-500" />
         }
-    }    // Generate direct links to profiles, posts, interests
+    }
+
     const getNotificationLink = (notification: Notification) => {
         const username = notification.sender?.username || notification.sender?.id
         switch (notification.type) {
@@ -157,7 +193,12 @@ export default function NotificationsContent() {
         switch (notification.type) {
             case 'follow': return `${name} подписался на вас`
             case 'post': return `${name} опубликовал новый пост`
-            case 'interest': return `${name} добавил новый интерес`
+            case 'interest': {
+                const section = notification.is_like ? 'Нравится' : 'Не нравится'
+                return notification.interest
+                    ? `${name} добавил "${notification.interest.title}" в раздел ${section}`
+                    : `${name} добавил новый интерес`
+            }
             default: return `${name} ${notification.content}`
         }
     }
@@ -264,8 +305,13 @@ export default function NotificationsContent() {
                                 </div>
 
                                 <div className="flex items-center gap-2 mt-2">
-                                    <div className="p-1.5 rounded-full bg-gray-100">
-                                        {getNotificationIcon(notification.type)}
+                                    <div className={`p-1.5 rounded-full ${notification.type === 'interest'
+                                        ? notification.is_like
+                                            ? 'bg-green-100'
+                                            : 'bg-red-100'
+                                        : 'bg-gray-100'
+                                        }`}>
+                                        {getNotificationIcon(notification.type, notification.is_like)}
                                     </div>
 
                                     {notification.type === 'follow' && (
@@ -275,7 +321,12 @@ export default function NotificationsContent() {
                                     {notification.type !== 'follow' && (
                                         <Link
                                             href={getNotificationLink(notification)}
-                                            className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-full text-gray-600 font-medium transition-colors"
+                                            className={`text-sm px-3 py-1.5 rounded-full font-medium transition-colors ${notification.type === 'interest'
+                                                ? notification.is_like
+                                                    ? 'bg-green-100 hover:bg-green-200 text-green-700'
+                                                    : 'bg-red-100 hover:bg-red-200 text-red-700'
+                                                : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                                                }`}
                                         >
                                             Посмотреть
                                         </Link>

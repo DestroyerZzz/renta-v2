@@ -149,25 +149,23 @@ export default function PostCard({ post, isOwner, onEdit, onDelete }: PostCardPr
                 </div>
 
                 <div className="flex space-x-3">
-                    {!isOwner && (
-                        <button
-                            onClick={handleShareClick}
-                            className="cursor-pointer flex items-center text-gray-500 hover:text-[#3d82f7] transition-colors duration-200"
-                            title="Скопировать ссылку на пост"
-                        >
-                            {isCopied ? (
-                                <>
-                                    <Check size={16} className="mr-1 text-green-500" />
-                                    <span className="hidden sm:inline">Скопировано</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Copy size={16} className="mr-1" />
-                                    <span className="hidden sm:inline">Копировать ссылку</span>
-                                </>
-                            )}
-                        </button>
-                    )}
+                    <button
+                        onClick={handleShareClick}
+                        className="cursor-pointer flex items-center text-gray-500 hover:text-[#3d82f7] transition-colors duration-200"
+                        title="Скопировать ссылку на пост"
+                    >
+                        {isCopied ? (
+                            <>
+                                <Check size={16} className="mr-1 text-green-500" />
+                                <span className="hidden sm:inline">Скопировано</span>
+                            </>
+                        ) : (
+                            <>
+                                <Copy size={16} className="mr-1" />
+                                <span className="hidden sm:inline">Копировать ссылку</span>
+                            </>
+                        )}
+                    </button>
 
                     {isOwner && (
                         <>
