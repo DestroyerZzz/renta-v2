@@ -26,13 +26,32 @@ export default function ReadOnlyProductCard({ product, onTagClick }: ReadOnlyPro
   const [isHighlighted, setIsHighlighted] = useState(false)
 
   const supabase = createClient()
-
   useEffect(() => {
+    let img: HTMLImageElement | null = null;
+
     if (product.image_url) {
-      const img = new Image();
+      img = new Image();
       img.src = product.image_url;
-      img.onload = () => setIsImageLoaded(true);
+      img.onload = () => {
+        setIsImageLoaded(true);
+        // Clear the image object to prevent memory leaks
+        img = null;
+      };
+      img.onerror = () => {
+        // Handle image loading errors
+        console.warn('Failed to load interest image:', product.image_url);
+        img = null;
+      };
     }
+
+    // Cleanup function to prevent memory leaks
+    return () => {
+      if (img) {
+        img.onload = null;
+        img.onerror = null;
+        img = null;
+      }
+    };
   }, [product.image_url]);
 
   // Check if this product should be highlighted based on URL fragment
@@ -299,11 +318,9 @@ export default function ReadOnlyProductCard({ product, onTagClick }: ReadOnlyPro
                 <SupabaseImage
                   src={product.image_url}
                   alt={product.title || description.substring(0, 30) || 'Изображение интереса'}
-                  className={`w-full h-full object-cover transition-all duration-500 ${isImageLoaded ? 'opacity-100' : 'opacity-0'
-                    }`}
+                  className={`w-full h-full object-cover transition-all duration-500 ${isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
                   fill={true}
                   quality={75}
-                  priority={false}
                   fallback={
                     <div className="w-full h-full flex items-center justify-center bg-gray-100 animate-pulse">
                       <p className="text-gray-500 text-xs sm:text-sm">Ошибка загрузки</p>

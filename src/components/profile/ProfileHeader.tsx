@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'
@@ -6,7 +5,7 @@ import { createClient } from '@/utils/supabase'
 import SupabaseImage from '@/components/ui/SupabaseImage'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Search } from 'lucide-react'
+import { Search, Filter } from 'lucide-react'
 import FollowButton from './FollowButton'
 import FollowStats from './FollowStats'
 
@@ -14,9 +13,17 @@ interface ProfileHeaderProps {
   userId: string
   tagFilter?: string
   onTagFilterChange?: (value: string) => void
+  onToggleTagsView?: () => void
+  isTagsViewActive?: boolean
 }
 
-export default function ProfileHeader({ userId, tagFilter = '', onTagFilterChange }: ProfileHeaderProps) {
+export default function ProfileHeader({
+  userId,
+  tagFilter = '',
+  onTagFilterChange,
+  onToggleTagsView,
+  isTagsViewActive = false
+}: ProfileHeaderProps) {
   const [userName, setUserName] = useState<string>('')
   const [username, setUsername] = useState<string | null>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -172,7 +179,8 @@ export default function ProfileHeader({ userId, tagFilter = '', onTagFilterChang
               alt="Profile Cover"
               className="w-full h-full object-cover rounded-t-lg"
               priority={true}
-              quality={85}
+              quality={50}
+              sizes="100vw"
               fallback={
                 <div className="rounded-lg w-full h-full bg-gradient-to-r from-[#3d82f7] to-purple-600"></div>
               }
@@ -188,7 +196,8 @@ export default function ProfileHeader({ userId, tagFilter = '', onTagFilterChang
                   alt="User Avatar"
                   className="w-full h-full rounded-full object-cover"
                   priority={true}
-                  quality={90}
+                  quality={80}
+                  sizes="130px"
                   fallback={
                     <div className="w-full h-full flex items-center justify-center bg-indigo-200 text-indigo-600 text-2xl font-bold rounded-full animate-pulse">
                       {userName?.charAt(0)?.toUpperCase() || 'U'}
@@ -286,12 +295,10 @@ export default function ProfileHeader({ userId, tagFilter = '', onTagFilterChang
                   />
                 </>
               )}
-            </div>
-
-            {/* Only show search in the interests page */}
+            </div>            {/* Only show search and filter in the interests page */}
             {isMainProfile && onTagFilterChange && (
-              <div className="w-full md:w-64">
-                <div className="relative group">
+              <div className="w-full md:w-64 flex items-center gap-3">
+                <div className="relative group flex-1">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <span className="text-gray-500 text-sm group-focus-within:text-[#3d82f7] transition-colors duration-200">#</span>
                   </div>
@@ -316,6 +323,20 @@ export default function ProfileHeader({ userId, tagFilter = '', onTagFilterChang
                     </div>
                   </div>
                 </div>
+
+                {/* Filter by tags button */}
+                {onToggleTagsView && (
+                  <button
+                    onClick={onToggleTagsView}
+                    className={`flex items-center justify-center p-2 rounded-full ${isTagsViewActive
+                      ? 'bg-[#3d82f7] text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      } transition-all duration-200`}
+                    title={isTagsViewActive ? "Обычный вид" : "Группировать по тегам"}
+                  >
+                    <Filter size={20} />
+                  </button>
+                )}
               </div>
             )}
           </div>

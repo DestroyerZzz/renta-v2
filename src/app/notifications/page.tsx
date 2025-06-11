@@ -1,4 +1,4 @@
-import PublicProfileLayout from '@/components/layout/PublicProfileLayout'
+import PublicProfileLayout from '@/components/layout/MainNavbar'
 import NotificationsContent from '../../components/notifications/NotificationsContent'
 
 export default function NotificationsPage() {

@@ -6,6 +6,9 @@ import { Database } from '@/types/database'
 import SupabaseImage from '../ui/SupabaseImage'
 import ConfirmationDialog from '../ui/ConfirmationDialog'
 import { Edit, Trash2, Tag, Upload, Loader2, MoreVertical } from 'lucide-react'
+import optimizeImage from '@/utils/imageOptimizer'
+import { format } from 'date-fns'
+import { ru } from 'date-fns/locale'
 
 type Product = Database['public']['Tables']['products']['Row']
 
@@ -143,29 +146,59 @@ export default function ProductCard({
         throw new Error('User not authenticated');
       }
 
+      // Start optimization phase progress (0-50%)
+      const startOptimizationProgress = () => {
+        let progress = 0;
+        const interval = setInterval(() => {
+          progress = Math.min(progress + 2, 45);
+          setUploadProgress(progress);
+          if (progress >= 45) clearInterval(interval);
+        }, 100);
+        return interval;
+      };
+
+      const optimizationInterval = startOptimizationProgress();      // Optimize the image before uploading with progress tracking
+      const optimizedFile = await optimizeImage(file, {
+        maxSizeMB: 0.8,
+        maxWidthOrHeight: 1200,
+        quality: 0.8,
+        onProgress: (progress) => {
+          // Only update if the callback progress is higher
+          const mappedProgress = Math.floor(progress * 0.5);
+          if (mappedProgress > 0) {
+            clearInterval(optimizationInterval);
+            // Round to nearest 10 for CSS classes
+            setUploadProgress(Math.floor(mappedProgress / 10) * 10);
+          }
+        }
+      }).catch(err => {
+        console.error('Error optimizing image:', err);
+        clearInterval(optimizationInterval);
+        return file; // Fall back to original file if optimization fails
+      });      // Set progress to 50% after optimization is complete
+      setUploadProgress(50);
+
+      // Log original vs optimized size
+      console.log(`Original: ${file.size / 1024} KB, Optimized: ${optimizedFile.size / 1024} KB`);
+
       // Upload image to Supabase Storage with user ID in path
-      const fileExt = file.name.split('.').pop();
+      const fileExt = optimizedFile.name.split('.').pop();
       const fileName = `${user.id}/${product.id}-${Date.now()}.${fileExt}`;
 
-      // console.log('Attempting to upload with path:', fileName);
-      // console.log('Current user ID:', user.id);
-
-      // Simulate upload progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return prev;
-          }
-          return prev + 10;
-        });
+      // Start upload phase progress (50-90%)
+      let uploadProgress = 50;
+      const uploadInterval = setInterval(() => {
+        uploadProgress = Math.min(uploadProgress + 5, 90);
+        setUploadProgress(Math.floor(uploadProgress / 10) * 10); // Round to nearest 10 for CSS classes
+        if (uploadProgress >= 90) clearInterval(uploadInterval);
       }, 200);
 
+      // Now use optimizedFile instead of original file
       const { error: uploadError, data: uploadData } = await supabase.storage
         .from('product_images')
-        .upload(fileName, file);
+        .upload(fileName, optimizedFile);
 
-      clearInterval(progressInterval);
+      clearInterval(uploadInterval);
       setUploadProgress(100);
 
       if (uploadError) {
@@ -235,6 +268,12 @@ export default function ProductCard({
   const description = product.description || 'Нет описания'
   const isDescriptionLong = description.length > MAX_DESCRIPTION_LENGTH
 
+  // Helper function to generate width classes from progress percentage
+  const getProgressBarWidthClass = (progress: number): string => {
+    const roundedProgress = Math.floor(progress / 10) * 10;
+    return `w-[${roundedProgress}%]`;
+  }
+
   return (
     <div
       id={`intrests-${product.id}`}
@@ -273,12 +312,10 @@ export default function ProductCard({
                           <Loader2 size={24} className="text-[#3d82f7] mb-1 animate-spin" />
                           <p className="text-gray-500 text-xs sm:text-sm text-center">
                             Загрузка... {uploadProgress}%
-                          </p>
-                          {uploadProgress > 0 && (
+                          </p>                          {uploadProgress > 0 && (
                             <div className="w-4/5 mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
                               <div
-                                className="h-full bg-[#3d82f7] transition-all duration-200"
-                                style={{ width: `${uploadProgress}%` }}
+                                className={`h-full bg-[#3d82f7] transition-all duration-200 ${getProgressBarWidthClass(uploadProgress)}`}
                               />
                             </div>
                           )}
@@ -378,9 +415,7 @@ export default function ProductCard({
                   {showFullDescription ? 'Показать меньше' : 'Показать больше'}
                 </button>
               )}
-            </div>
-
-            {/* Tag and date */}
+            </div>            {/* Tag and date */}
             <div className="flex justify-between items-center py-1 sm:py-2 border-t border-gray-100 group-hover:border-indigo-50 transition-colors duration-300">
               <button
                 type="button"
@@ -391,11 +426,7 @@ export default function ProductCard({
                 <span className="md:inline">{`#${getDisplayTag()}`}</span>
               </button>
               <div className="text-xs text-gray-500 group-hover:text-gray-700 transition-colors duration-300">
-                {new Date(product.created_at).toLocaleDateString('ru-RU', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric'
-                }).replace(/\//g, '.')}
+                {format(new Date(product.created_at), 'dd.MM.yyyy', { locale: ru })}
               </div>
             </div>
           </div>

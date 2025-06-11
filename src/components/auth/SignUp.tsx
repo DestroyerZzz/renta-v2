@@ -44,16 +44,16 @@ export default function SignUp() {
     }
 
     setIsCheckingUsername(true);
-    
+
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('username')
         .eq('username', username.trim())
         .limit(1);
-      
+
       if (error) throw error;
-      
+
       // Username is available if no matching profiles were found
       const isAvailable = !data || data.length === 0;
       setIsUsernameAvailable(isAvailable);
@@ -77,7 +77,7 @@ export default function SignUp() {
       setIsUsernameAvailable(null);
       setUsernameError(null);
     }
-    
+
     return () => {
       debouncedCheckUsername.cancel();
     };
@@ -127,13 +127,13 @@ export default function SignUp() {
         .select('username')
         .eq('username', username.trim())
         .limit(1);
-        
+
       if (existingUsers && existingUsers.length > 0) {
         setError('Это имя пользователя уже занято. Пожалуйста, выберите другое.');
         setIsLoading(false);
         return;
       }
-      
+
       // Create the user account
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -167,14 +167,14 @@ export default function SignUp() {
         // The database trigger should handle profile creation automatically
         // Let's just wait a moment to ensure the trigger has time to execute
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
+
         // Now check if the profile was created (don't try to create it again)
         const { data: checkProfile, error: checkError } = await supabase
           .from('profiles')
           .select('id, full_name, username')
           .eq('id', data.user.id)
           .single();
-          
+
         if (checkError || !checkProfile) {
           // console.log('Profile not found yet, this is normal as it might still be creating');
         } else {
@@ -184,10 +184,9 @@ export default function SignUp() {
         // Display enhanced verification toast notification
         toast.custom(
           (t) => (
-            <div 
-              className={`${
-                t.visible ? 'animate-enter' : 'animate-leave'
-              } max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}
+            <div
+              className={`${t.visible ? 'animate-enter' : 'animate-leave'
+                } max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}
             >
               <div className="flex-1 w-0 p-4">
                 <div className="flex items-start">
@@ -218,14 +217,14 @@ export default function SignUp() {
               </div>
             </div>
           ),
-          { 
+          {
             duration: 8000, // Longer duration to ensure user sees it
             position: 'top-center',
           }
         );
-        
+
         // Navigate to dashboard after toast is shown
-        router.push('/dashboard');
+        router.push('/login');
         router.refresh();
       }
     } catch (error) {
@@ -239,7 +238,7 @@ export default function SignUp() {
   // Function to render username availability indicator
   const renderUsernameAvailability = () => {
     if (!username || username.trim().length < 3) return null;
-    
+
     if (isCheckingUsername) {
       return (
         <div className="flex items-center mt-1 text-xs text-gray-500">
@@ -248,7 +247,7 @@ export default function SignUp() {
         </div>
       );
     }
-    
+
     if (usernameError) {
       return (
         <div className="flex items-center mt-1 text-xs text-red-500">
@@ -257,7 +256,7 @@ export default function SignUp() {
         </div>
       );
     }
-    
+
     if (isUsernameAvailable === true) {
       return (
         <div className="flex items-center mt-1 text-xs text-green-600">
@@ -266,7 +265,7 @@ export default function SignUp() {
         </div>
       );
     }
-    
+
     if (isUsernameAvailable === false && !usernameError) {
       return (
         <div className="flex items-center mt-1 text-xs text-red-500">
@@ -275,7 +274,7 @@ export default function SignUp() {
         </div>
       );
     }
-    
+
     return null;
   };
 
@@ -288,14 +287,14 @@ export default function SignUp() {
             Зарегистрируйте новую учетную запись
           </p>
         </div>
-        
+
         {error && (
           <div className="p-3 text-sm text-red-600 bg-red-100 rounded-md flex items-start">
             <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
-        
+
         <form className="mt-8 space-y-6" onSubmit={handleSignUp}>
           <div>
             <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
@@ -317,7 +316,7 @@ export default function SignUp() {
               />
             </div>
           </div>
-          
+
           <div>
             <label htmlFor="username" className="block text-sm font-medium text-gray-700">
               Имя пользователя
@@ -333,13 +332,12 @@ export default function SignUp() {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className={`block text-black w-full pl-10 pr-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${
-                  isUsernameAvailable === false 
-                    ? 'border-red-300 bg-red-50' 
+                className={`block text-black w-full pl-10 pr-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${isUsernameAvailable === false
+                    ? 'border-red-300 bg-red-50'
                     : isUsernameAvailable === true && !usernameError
                       ? 'border-green-300 bg-green-50'
                       : 'border-gray-300'
-                }`}
+                  }`}
                 placeholder="Уникальное имя пользователя"
                 minLength={3}
               />
@@ -349,7 +347,7 @@ export default function SignUp() {
               Используйте только буквы, цифры, дефисы и подчеркивания
             </p>
           </div>
-          
+
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">
               Адрес электронной почты
@@ -370,7 +368,7 @@ export default function SignUp() {
               />
             </div>
           </div>
-          
+
           <div className="mt-4">
             <label htmlFor="password" className="block text-sm font-medium text-gray-700">
               Пароль
@@ -391,7 +389,7 @@ export default function SignUp() {
               />
             </div>
           </div>
-          
+
           <div>
             <button
               type="submit"
@@ -402,7 +400,7 @@ export default function SignUp() {
             </button>
           </div>
         </form>
-        
+
         <div className="text-center mt-4">
           <p className="text-sm text-gray-600">
             У вас уже есть аккаунт?{' '}

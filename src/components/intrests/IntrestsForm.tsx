@@ -5,12 +5,14 @@ import { createClient } from '@/utils/supabase'
 import { Database } from '@/types/database'
 import { v4 as uuidv4 } from 'uuid'
 import SupabaseImage from '../ui/SupabaseImage'
-import ProductSuggestionBox, { SuggestionProductData } from '../suggestions/ProductSuggestionBox'
+import ProductSuggestionBox, { SuggestionProductData } from '../suggestions/InterestsSuggestionBox'
 import TagSuggestionBox, { SuggestionTagData } from '../suggestions/TagSuggestionBox'
 import { Save, X, AlertCircle, Loader2, RefreshCw, Lock, Info, Hash, Trash2 } from 'lucide-react'
 import { DEFAULT_TAG } from './IntrestCard'
 import { toast } from 'react-hot-toast'
 import ConfirmationDialog from '../ui/ConfirmationDialog'
+import optimizeImage from '@/utils/imageOptimizer'
+import { format } from 'date-fns'
 
 type Product = Database['public']['Tables']['products']['Row']
 type ProductInsert = Database['public']['Tables']['products']['Insert']
@@ -33,6 +35,8 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
   const [isLoading, setIsLoading] = useState(false)
   const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false)
   const [isSearchingTagSuggestions, setIsSearchingTagSuggestions] = useState(false)
+  const [imageProgress, setImageProgress] = useState(0)
+  const [isOptimizingImage, setIsOptimizingImage] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [productFromDb, setProductFromDb] = useState<SuggestionProductData | null>(null)
   const [lockedFields, setLockedFields] = useState({
@@ -44,6 +48,12 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [duplicateProduct, setDuplicateProduct] = useState<Product | null>(null)
+
+  // Helper function to generate width classes from progress percentage
+  const getProgressBarWidthClass = (progress: number): string => {
+    const roundedProgress = Math.floor(progress / 10) * 10;
+    return `w-[${roundedProgress}%]`;
+  }
 
   // Refs for input elements to control focus
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -80,28 +90,60 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
 
       setTagWithoutHash(tagWithoutCommas)
 
-      // Store the tag value - we'll add the # only during submission
-      // Don't add # here to prevent duplicates
+      // Store the tag value - we'll add the # only during submission      // Don't add # here to prevent duplicates
       setTag(tagWithoutCommas)
     }
-  }
+  },
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0]
-      // Only allow image changes if fields are not locked
-      if (!lockedFields.image) {
-        setImage(file)
+    handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+        const file = e.target.files[0]
+        // Only allow image changes if fields are not locked
+        if (!lockedFields.image) {
+          try {
+            // Create preview with original file for immediate feedback
+            const reader = new FileReader()
+            reader.onload = () => {
+              setImagePreview(reader.result as string)
+            }
+            reader.readAsDataURL(file)
 
-        // Create preview
-        const reader = new FileReader()
-        reader.onload = () => {
-          setImagePreview(reader.result as string)
+            // Reset progress and set optimizing state
+            setImageProgress(0)
+            setIsOptimizingImage(true)
+
+            // Optimize the image in the background with progress tracking
+            const optimizedFile = await optimizeImage(file, {
+              maxSizeMB: 0.8,
+              maxWidthOrHeight: 1200,
+              quality: 0.75,
+              onProgress: (progress) => {
+                // Ensure progress is an integer for proper style generation
+                setImageProgress(Math.round(progress))
+              }
+            })
+
+            // Set progress to 100% when complete
+            setImageProgress(100)
+            setImage(optimizedFile)
+
+            // Log the optimization results
+            console.log(`Original size: ${(file.size / 1024).toFixed(2)} KB`)
+            console.log(`Optimized size: ${(optimizedFile.size / 1024).toFixed(2)} KB`)
+            console.log(`Reduction: ${((1 - optimizedFile.size / file.size) * 100).toFixed(1)}%`)
+          } catch (err) {
+            console.error('Error optimizing image:', err)
+            // Fallback to original file if optimization fails
+            setImage(file)
+          } finally {
+            // Wait a moment to show the 100% progress before hiding
+            setTimeout(() => {
+              setIsOptimizingImage(false)
+            }, 500)
+          }
         }
-        reader.readAsDataURL(file)
       }
     }
-  }
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTitle = e.target.value
@@ -395,14 +437,14 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
                     </p>
                   </div>
                 </div>
-              </div>
-              <div className="flex border-l border-red-200">
+              </div>              <div className="flex border-l border-red-200">
                 <button
                   onClick={() => {
                     toast.dismiss(t.id);
                     handleDeleteClick(duplicated);
                   }}
-                  className="cursor-pointer w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-red-600 hover:text-red-500 hover:bg-red-100 transition-colors duration-150 focus:outline-none"
+                  disabled={isOptimizingImage}
+                  className="cursor-pointer w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-red-600 hover:text-red-500 hover:bg-red-100 transition-colors duration-150 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-red-600"
                 >
                   <Trash2 className="h-5 w-5 mr-1" />
                   Удалить
@@ -417,13 +459,14 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
           setIsLoading(false);
           return;
         }
-      }
-
-      let imageUrl = product?.image_url || null;
+      } let imageUrl = product?.image_url || null;
 
       if (image) {
         const fileExt = image.name.split('.').pop()
         const fileName = `${userId}/${uuidv4()}.${fileExt}`
+
+        // Log size of optimized image for monitoring
+        console.log(`Uploading optimized interest image: ${image.size / 1024} KB`)
 
         const { error: uploadError } = await supabase.storage
           .from('product_images')
@@ -450,9 +493,7 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
         }
       } else if (imagePreview && imagePreview !== product?.image_url) {
         imageUrl = imagePreview
-      }
-
-      // Handle the tag properly to ensure exactly one # symbol
+      }      // Handle the tag properly to ensure exactly one # symbol
       let finalTag = '';
       if (tagWithoutHash && tagWithoutHash.trim()) {
         // Remove any # at the beginning if present
@@ -461,16 +502,22 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
         finalTag = cleanTag ? `#${cleanTag}` : '';
       } else {
         finalTag = DEFAULT_TAG;
-      }
-
+      }      
+      
       // Update productData to use the potentially corrected title (finalTitle)
+      // Using date-fns to ensure consistent date formatting across the app
+      // This ensures the created_at field is properly formatted for Supabase
+      const now = new Date();
+      const isoDateString = format(now, "yyyy-MM-dd'T'HH:mm:ss.SSSxxx");
+      
       const productData: ProductInsert = {
         user_id: userId,
         title: finalTitle, // Use the finalized title with proper capitalization
         description: description.trim(),
         tag: finalTag,
         image_url: imageUrl,
-        display_section: section
+        display_section: section,
+        created_at: isoDateString // Explicitly set to current date/time using date-fns
       }
 
       if (isEditing && product?.id) {
@@ -567,7 +614,7 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
             </div>
           )}
 
-          {!isEditing && (
+          {!isEditing && !isOptimizingImage && (
             <ProductSuggestionBox
               inputValue={title}
               onFindMatch={handleMatchFound}
@@ -678,6 +725,18 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
                   </span>
                 </div>
               )}
+
+              {/* Show optimization progress while processing the image */}
+              {isOptimizingImage && (
+                <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center text-white">
+                  <Loader2 size={24} className="animate-spin mb-2" />
+                  <p className="text-sm mb-1">Оптимизация: {imageProgress}%</p>
+                  <div className="w-4/5 bg-gray-700 rounded-full h-1.5 mt-1 overflow-hidden">
+                    <div className={`bg-white h-1.5 rounded-full transition-all duration-300 ${getProgressBarWidthClass(imageProgress)}`}
+                    ></div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <input
@@ -685,13 +744,23 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
             type="file"
             accept="image/*"
             onChange={handleImageChange}
-            disabled={lockedFields.image}
+            disabled={lockedFields.image || isOptimizingImage}
             aria-label="Выберите изображение Интереса"
-            className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium ${lockedFields.image
+            className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium ${lockedFields.image || isOptimizingImage
               ? 'file:bg-gray-100 file:text-gray-400 cursor-not-allowed opacity-75'
               : 'file:bg-indigo-50 file:text-[#3d82f7] hover:file:bg-indigo-100 cursor-pointer'
               }`}
           />
+          {isOptimizingImage && (
+            <div className="mt-2 flex items-center">
+              <Loader2 size={16} className="text-[#3d82f7] mr-2 animate-spin" />
+              <span className="text-xs text-gray-700 mr-2">Оптимизация: {imageProgress}%</span>              <div className="ml-2 flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className={`h-full bg-[#3d82f7] rounded-full transition-all duration-300 ${getProgressBarWidthClass(imageProgress)}`}
+                ></div>
+              </div>
+            </div>
+          )}
           {lockedFields.image && (
             <p className="mt-1 text-xs text-gray-500">
               автоматически заполнена
@@ -700,20 +769,19 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
         </div>
 
         {/* Button section */}
-        <div className="flex justify-end space-x-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="cursor-pointer px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#3d82f7] flex items-center space-x-2"
-          >
-            <X size={16} />
-            <span>Отмена</span>
-          </button>
-          <button
-            type="submit"
-            disabled={isLoading || isSearchingSuggestions}
-            className="cursor-pointer px-4 py-2 text-sm font-medium text-white bg-[#3d82f7]  border border-transparent rounded-md shadow-sm hover:bg-[#2d6ce0] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#3d82f7] disabled:opacity-50 flex items-center space-x-2"
-          >
+        <div className="flex justify-end space-x-3">          <button
+          type="button"
+          onClick={onCancel}
+          disabled={isOptimizingImage}
+          className="cursor-pointer px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#3d82f7] flex items-center space-x-2 disabled:opacity-50"
+        >
+          <X size={16} />
+          <span>Отмена</span>
+        </button><button
+          type="submit"
+          disabled={isLoading || isSearchingSuggestions || isOptimizingImage}
+          className={`px-4 py-2 text-sm font-medium text-white bg-[#3d82f7] border border-transparent rounded-md shadow-sm hover:bg-[#2d6ce0] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#3d82f7] disabled:opacity-50 flex items-center space-x-2 ${isLoading || isSearchingSuggestions || isOptimizingImage ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+        >
             {isLoading ? (
               <>
                 <Loader2 size={16} className="animate-spin" />

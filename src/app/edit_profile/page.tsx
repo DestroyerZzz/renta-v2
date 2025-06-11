@@ -7,6 +7,7 @@ import SupabaseImage from '@/components/ui/SupabaseImage'
 import { Edit, Camera, Image, User, Check, X, AlertCircle, Loader2 } from 'lucide-react'
 import { debounce } from 'lodash'
 import toast from 'react-hot-toast'
+import optimizeImage from '@/utils/imageOptimizer'
 
 export default function ProfilePage() {
   const [fullName, setFullName] = useState('')
@@ -24,6 +25,10 @@ export default function ProfilePage() {
   const [isUsernameAvailable, setIsUsernameAvailable] = useState<boolean | null>(null)
   const [usernameError, setUsernameError] = useState<string | null>(null)
   const [originalUsername, setOriginalUsername] = useState<string | null>(null)
+  const [avatarProgress, setAvatarProgress] = useState(0)
+  const [coverProgress, setCoverProgress] = useState(0)
+  const [isOptimizingAvatar, setIsOptimizingAvatar] = useState(false)
+  const [isOptimizingCover, setIsOptimizingCover] = useState(false)
 
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
@@ -205,31 +210,99 @@ export default function ProfilePage() {
     };
   }, [username, debouncedCheckUsername]);
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
-      setAvatarFile(file)
 
-      // Create preview
+      // Create preview with original file for immediate feedback
       const reader = new FileReader()
       reader.onload = () => {
         setAvatarUrl(reader.result as string)
       }
       reader.readAsDataURL(file)
+
+      try {
+        // Reset progress and set optimizing state
+        setAvatarProgress(0)
+        setIsOptimizingAvatar(true)
+
+        // Optimize the avatar image - use higher quality for avatars
+        const optimizedFile = await optimizeImage(file, {
+          maxSizeMB: 0.5,
+          maxWidthOrHeight: 400, // Appropriate for profile pictures
+          quality: 0.85,
+          useWebP: true,
+          onProgress: (progress) => {
+            // Ensure progress is an integer for proper style generation
+            setAvatarProgress(Math.round(progress))
+          }
+        })
+
+        // Set progress to 100% when complete
+        setAvatarProgress(100)
+        setAvatarFile(optimizedFile)
+
+        // Log optimization results
+        console.log(`Avatar original size: ${(file.size / 1024).toFixed(2)} KB`)
+        console.log(`Avatar optimized size: ${(optimizedFile.size / 1024).toFixed(2)} KB`)
+        console.log(`Avatar reduction: ${((1 - optimizedFile.size / file.size) * 100).toFixed(1)}%`)
+      } catch (err) {
+        console.error('Error optimizing avatar image:', err)
+        // Fallback to original file if optimization fails
+        setAvatarFile(file)
+      } finally {
+        // Wait a moment to show the 100% progress before hiding
+        setTimeout(() => {
+          setIsOptimizingAvatar(false)
+        }, 500)
+      }
     }
   }
 
-  const handleCoverImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
-      setCoverImageFile(file)
 
-      // Create preview
+      // Create preview with original file for immediate feedback
       const reader = new FileReader()
       reader.onload = () => {
         setCoverImageUrl(reader.result as string)
       }
-      reader.readAsDataURL(file)
+      reader.readAsDataURL(file);
+
+      try {
+        setIsOptimizingCover(true)
+        setCoverProgress(0)
+
+        // Optimize the cover image - covers can be larger but still optimized
+        const optimizedFile = await optimizeImage(file, {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1920, // Cover images can be larger
+          quality: 0.75,
+          useWebP: true,
+          onProgress: (progress) => {
+            setCoverProgress(Math.round(progress))
+          }
+        })
+
+        // Set progress to 100% when complete
+        setCoverProgress(100)
+        setCoverImageFile(optimizedFile)
+
+        // Log optimization results
+        console.log(`Cover original size: ${(file.size / 1024).toFixed(2)} KB`)
+        console.log(`Cover optimized size: ${(optimizedFile.size / 1024).toFixed(2)} KB`)
+        console.log(`Cover reduction: ${((1 - optimizedFile.size / file.size) * 100).toFixed(1)}%`)
+      } catch (err) {
+        console.error('Error optimizing cover image:', err)
+        // Fallback to original file if optimization fails
+        setCoverImageFile(file)
+      } finally {
+        // Wait a moment to show the 100% progress before hiding
+        setTimeout(() => {
+          setIsOptimizingCover(false)
+        }, 500)
+      }
     }
   }
 
@@ -341,29 +414,30 @@ export default function ProfilePage() {
     }
 
     try {
-      let newAvatarUrl = avatarUrl
-      let newCoverImageUrl = coverImageUrl
+      let newAvatarUrl = avatarUrl;
+      let newCoverImageUrl = coverImageUrl;
 
       // Upload new avatar if selected
       if (avatarFile) {
         // Validate file size (max 2MB)
         if (avatarFile.size > 2 * 1024 * 1024) {
-          throw new Error('Размер файла аватара не должен превышать 2MB')
+          throw new Error('Размер файла аватара не должен превышать 2MB');
         }
 
         // Create proper file path structure
-        const fileExt = avatarFile.name.split('.').pop()
-        const fileName = `${uuidv4()}.${fileExt}`
-        const filePath = `${userId}/${fileName}`
+        const fileExt = avatarFile.name.split('.').pop();
+        const fileName = `${uuidv4()}.${fileExt}`;
+        const filePath = `${userId}/${fileName}`;
 
-        // console.log('Attempting to upload avatar to:', filePath)
+        // Log size of optimized avatar image for monitoring
+        console.log(`Uploading optimized avatar: ${avatarFile.size / 1024} KB`);
 
         // First ensure the profile exists before uploading
         const { error: profileCheckError } = await supabase
           .from('profiles')
           .select('id')
           .eq('id', userId)
-          .single()
+          .single();
 
         if (profileCheckError && profileCheckError.code !== 'PGRST116') {
           // Create profile if it doesn't exist
@@ -373,11 +447,11 @@ export default function ProfilePage() {
               id: userId,
               full_name: fullName,
               updated_at: new Date().toISOString(),
-            })
+            });
 
           if (insertError) {
-            console.error('Error creating profile:', insertError)
-            throw new Error(`Не удалось создать профиль: ${insertError.message}`)
+            console.error('Error creating profile:', insertError);
+            throw new Error(`Не удалось создать профиль: ${insertError.message}`);
           }
         }
 
@@ -387,31 +461,28 @@ export default function ProfilePage() {
           .upload(filePath, avatarFile, {
             cacheControl: '3600',
             upsert: true,
-          })
+          });
 
         if (uploadError) {
-          console.error('Upload error details:', uploadError)
-          throw new Error(`Ошибка загрузки аватара: ${uploadError.message}`)
+          console.error('Upload error details:', uploadError);
+          throw new Error(`Ошибка загрузки аватара: ${uploadError.message}`);
         }
 
         // Get public URL after successful upload
-        const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
-        newAvatarUrl = data.publicUrl
-
-        // console.log('New avatar URL:', newAvatarUrl)
+        const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+        newAvatarUrl = data.publicUrl;
 
         // Delete old avatar if exists
         if (avatarUrl && !avatarUrl.startsWith('data:')) {
           try {
-            const oldAvatarPath = new URL(avatarUrl).pathname.split('/').pop()
-            const oldUserId = new URL(avatarUrl).pathname.split('/')[new URL(avatarUrl).pathname.split('/').length - 2]
+            const oldAvatarPath = new URL(avatarUrl).pathname.split('/').pop();
+            const oldUserId = new URL(avatarUrl).pathname.split('/')[new URL(avatarUrl).pathname.split('/').length - 2];
 
             if (oldAvatarPath && oldUserId === userId) {
-              await supabase.storage.from('avatars').remove([`${userId}/${oldAvatarPath}`])
-              // console.log('Old avatar removed successfully')
+              await supabase.storage.from('avatars').remove([`${userId}/${oldAvatarPath}`]);
             }
           } catch (deleteError) {
-            console.error('Error deleting old avatar (non-critical):', deleteError)
+            console.error('Error deleting old avatar (non-critical):', deleteError);
             // Don't throw error for this - it's not critical
           }
         }
@@ -421,15 +492,16 @@ export default function ProfilePage() {
       if (coverImageFile) {
         // Validate file size (max 5MB)
         if (coverImageFile.size > 5 * 1024 * 1024) {
-          throw new Error('Размер файла обложки не должен превышать 5MB')
+          throw new Error('Размер файла обложки не должен превышать 5MB');
         }
 
         // Create proper file path structure
-        const fileExt = coverImageFile.name.split('.').pop()
-        const fileName = `${uuidv4()}.${fileExt}`
-        const filePath = `${userId}/${fileName}`
+        const fileExt = coverImageFile.name.split('.').pop();
+        const fileName = `${uuidv4()}.${fileExt}`;
+        const filePath = `${userId}/${fileName}`;
 
-        // console.log('Attempting to upload cover image to:', filePath)
+        // Log size of optimized cover image for monitoring
+        console.log(`Uploading optimized cover image: ${coverImageFile.size / 1024} KB`);
 
         // Upload the cover image
         const { error: uploadError } = await supabase.storage
@@ -437,31 +509,28 @@ export default function ProfilePage() {
           .upload(filePath, coverImageFile, {
             cacheControl: '3600',
             upsert: true,
-          })
+          });
 
         if (uploadError) {
-          console.error('Upload error details:', uploadError)
-          throw new Error(`Ошибка загрузки обложки: ${uploadError.message}`)
+          console.error('Upload error details:', uploadError);
+          throw new Error(`Ошибка загрузки обложки: ${uploadError.message}`);
         }
 
         // Get public URL after successful upload
-        const { data } = supabase.storage.from('covers').getPublicUrl(filePath)
-        newCoverImageUrl = data.publicUrl
-
-        // console.log('New cover image URL:', newCoverImageUrl)
+        const { data } = supabase.storage.from('covers').getPublicUrl(filePath);
+        newCoverImageUrl = data.publicUrl;
 
         // Delete old cover image if exists
         if (coverImageUrl && !coverImageUrl.startsWith('data:')) {
           try {
-            const oldCoverPath = new URL(coverImageUrl).pathname.split('/').pop()
-            const oldUserId = new URL(coverImageUrl).pathname.split('/')[new URL(coverImageUrl).pathname.split('/').length - 2]
+            const oldCoverPath = new URL(coverImageUrl).pathname.split('/').pop();
+            const oldUserId = new URL(coverImageUrl).pathname.split('/')[new URL(coverImageUrl).pathname.split('/').length - 2];
 
             if (oldCoverPath && oldUserId === userId) {
-              await supabase.storage.from('covers').remove([`${userId}/${oldCoverPath}`])
-              // console.log('Old cover image removed successfully')
+              await supabase.storage.from('covers').remove([`${userId}/${oldCoverPath}`]);
             }
           } catch (deleteError) {
-            console.error('Error deleting old cover image (non-critical):', deleteError)
+            console.error('Error deleting old cover image (non-critical):', deleteError);
             // Don't throw error for this - it's not critical
           }
         }
@@ -477,17 +546,17 @@ export default function ProfilePage() {
           cover_image_url: newCoverImageUrl,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', userId)
+        .eq('id', userId);
 
       if (updateError) {
-        throw new Error(`Ошибка обновления профиля: ${updateError.message}`)
+        throw new Error(`Ошибка обновления профиля: ${updateError.message}`);
       }
 
       // Update the original username state
       setOriginalUsername(username);
 
       // Show success message
-      setMessage({ type: 'success', text: 'Профиль успешно обновлен' })
+      setMessage({ type: 'success', text: 'Профиль успешно обновлен' });
 
       // Show toast notification if username was updated
       if (username && username !== originalUsername) {
@@ -497,11 +566,20 @@ export default function ProfilePage() {
         });
       }
     } catch (error) {
-      console.error('Error updating profile:', error)
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Неизвестная ошибка' })
+      console.error('Error updating profile:', error);
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Неизвестная ошибка'
+      });
     } finally {
-      setIsSaving(false)
+      setIsSaving(false);
     }
+  };
+
+  // Helper function to generate width classes from progress percentage
+  const getProgressBarWidthClass = (progress: number): string => {
+    const roundedProgress = Math.floor(progress / 10) * 10;
+    return `w-[${roundedProgress}%]`;
   }
 
   if (isLoading) {
@@ -541,13 +619,16 @@ export default function ProfilePage() {
                       src={coverImageUrl}
                       alt="Cover"
                       fill
-                      className="object-cover "
+                      className="object-cover"
+                      quality={85}
                     />
                   ) : (
                     <SupabaseImage
                       src={coverImageUrl}
                       alt="Cover"
                       className="object-cover w-full h-full"
+                      quality={85}
+                      sizes="100vw"
                     />
                   )
                 ) : (
@@ -556,12 +637,23 @@ export default function ProfilePage() {
                   </div>
                 )}
 
+                {/* Cover image optimization progress overlay */}
+                {isOptimizingCover && (
+                  <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center text-white">
+                    <Loader2 size={24} className="animate-spin mb-2" />
+                    <p className="text-sm mb-1">Оптимизация: {coverProgress}%</p>
+                    <div className="w-4/5 bg-gray-700 rounded-full h-1.5 mt-1 overflow-hidden">
+                      <div className={`bg-white h-1.5 rounded-full transition-all duration-300 ${getProgressBarWidthClass(coverProgress)}`}></div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Edit button for cover image */}
                 <div className="absolute top-2 right-2">
                   <button
                     type="button"
                     onClick={() => setShowDropdown(!showDropdown)}
-                    className="bg-black/30 hover:bg-black/50 p-2 rounded-full transition-colors duration-300 focus:outline-none"
+                    className="cursor-pointer bg-black/30 hover:bg-black/50 p-2 rounded-full transition-colors duration-300 focus:outline-none"
                     aria-label="Редактировать изображения"
                   >
                     <Edit className="h-5 w-5 text-white" />
@@ -574,7 +666,7 @@ export default function ProfilePage() {
                         <button
                           type="button"
                           onClick={triggerAvatarInput}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                          className="cursor-pointer w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
                         >
                           <Camera size={16} />
                           <span>Изменить аватар</span>
@@ -582,7 +674,7 @@ export default function ProfilePage() {
                         <button
                           type="button"
                           onClick={triggerCoverInput}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                          className="cursor-pointer w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
                         >
                           <Image size={16} aria-label="image-icon" />
                           <span>Изменить обложку</span>
@@ -603,17 +695,33 @@ export default function ProfilePage() {
                         alt="Avatar"
                         fill
                         className="object-cover"
+                        quality={90}
                       />
                     ) : (
                       <SupabaseImage
                         src={avatarUrl}
                         alt="Avatar"
                         className="w-full h-full object-cover absolute inset-0"
+                        quality={90}
+                        sizes="128px"
                       />
                     )
                   ) : (
                     <div className="h-full w-full flex items-center justify-center bg-gray-200">
                       <Camera size={24} className="text-gray-400" />
+                    </div>
+                  )}
+
+                  {/* Avatar optimization progress overlay */}
+                  {isOptimizingAvatar && (
+                    <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center text-white">
+                      <Loader2 size={20} className="animate-spin mb-1" />
+                      <p className="text-xs font-medium">
+                        {avatarProgress}%
+                      </p>
+                      <div className="w-4/5 h-1 mt-1 bg-gray-700 rounded-full overflow-hidden">
+                        <div className={`h-full bg-white rounded-full ${getProgressBarWidthClass(avatarProgress)}`}></div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -692,14 +800,13 @@ export default function ProfilePage() {
           </div>
 
           {/* Submit Button */}
-          <div>
-            <button
-              type="submit"
-              disabled={isSaving || isCheckingUsername || isUsernameAvailable === false}
-              className="cursor-pointer w-full px-4 py-2 text-sm font-medium text-white bg-[#3d82f7] border border-transparent rounded-md shadow-sm hover:bg-[#2d6ce0] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {isSaving ? 'Сохранение...' : 'Сохранить профиль'}
-            </button>
+          <div>            <button
+            type="submit"
+            disabled={isSaving || isCheckingUsername || isUsernameAvailable === false || isOptimizingAvatar || isOptimizingCover}
+            className="cursor-pointer w-full px-4 py-2 text-sm font-medium text-white bg-[#3d82f7] border border-transparent rounded-md shadow-sm hover:bg-[#2d6ce0] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+          >
+            {isSaving ? 'Сохранение...' : 'Сохранить профиль'}
+          </button>
           </div>
         </form>
       </div>

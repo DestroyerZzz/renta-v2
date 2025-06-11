@@ -13,6 +13,8 @@ interface SupabaseImageProps {
   fallback?: React.ReactNode
   priority?: boolean
   quality?: number
+  sizes?: string
+  loading?: 'eager' | 'lazy'
 }
 
 /**
@@ -27,7 +29,9 @@ export default function SupabaseImage({
   className = '',
   fallback,
   priority = false,
-  quality = 75
+  quality = 75,
+  sizes = '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw',
+  loading: imageLoading
 }: SupabaseImageProps) {
   const [error, setError] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -45,11 +49,16 @@ export default function SupabaseImage({
     setError(false)
     setLoading(true)
 
+    // For data URLs, set loading to false immediately
+    if (isDataUrl) {
+      setLoading(false)
+    }
+
     // Reset error state when src changes
     return () => {
       setError(false)
     }
-  }, [src])
+  }, [src, isDataUrl])
 
   // If image fails to load or there's no src, show the fallback
   if (error || !src) {
@@ -65,6 +74,7 @@ export default function SupabaseImage({
   }
 
   const imageClasses = `${className} ${loading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300 ${fill ? 'object-cover w-full h-full' : ''}`
+  const loadingAttribute = imageLoading || (priority ? "eager" : "lazy")
 
   if (fill) {
     return (
@@ -76,11 +86,11 @@ export default function SupabaseImage({
           className={imageClasses}
           onError={() => setError(true)}
           onLoad={handleLoad}
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          sizes={sizes}
           priority={priority}
           quality={quality}
-          loading={priority ? "eager" : "lazy"}
-          unoptimized={!isDataUrl && isSupabaseUrl} // Let Supabase handle optimization for its storage
+          loading={loadingAttribute}
+          unoptimized={!isDataUrl && isSupabaseUrl}
         />
       </div>
     )
@@ -95,10 +105,10 @@ export default function SupabaseImage({
       className={imageClasses}
       onError={() => setError(true)}
       onLoad={handleLoad}
+      sizes={sizes}
       priority={priority}
       quality={quality}
-      loading={priority ? "eager" : "lazy"}
-      unoptimized={!isDataUrl && isSupabaseUrl} // Let Supabase handle optimization for its storage
-    />
+      loading={loadingAttribute}
+      unoptimized={!isDataUrl && isSupabaseUrl} />
   )
 }

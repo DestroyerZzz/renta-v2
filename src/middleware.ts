@@ -45,10 +45,10 @@ export async function middleware(request: NextRequest) {
     const isAuthenticated = !!session && !!user
     const userId = user?.id
 
-  // Define route types
+    // Define route types
     const isAuthRoute = request.nextUrl.pathname.startsWith('/login') ||
       request.nextUrl.pathname.startsWith('/signup')
-    const isProtectedRoute = request.nextUrl.pathname.includes('/edit_profile') || 
+    const isProtectedRoute = request.nextUrl.pathname.includes('/edit_profile') ||
       request.nextUrl.pathname.startsWith('/notifications')
     const isPublicProfileRoute = request.nextUrl.pathname.startsWith('/profile/')
 
@@ -148,5 +148,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/login', '/signup', '/profile/:path*', '/notifications', '/notifications/:path*'],
+  matcher: ['/', '/login', '/signup', '/profile/:path*', '/notifications', '/notifications/:path*', '/feed', '/feed/:path*'],
 }

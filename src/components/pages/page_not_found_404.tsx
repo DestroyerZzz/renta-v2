@@ -2,9 +2,11 @@
 
 import { useRouter } from 'next/navigation'
 import { Home } from 'lucide-react'
+import { Suspense } from 'react'
 // import Link from 'next/link'
-export function NotFoundPage() {
-    const router = useRouter()
+
+function NotFoundContent() {
+  const router = useRouter()
   return (
     <section className="bg-white font-sans min-h-screen flex items-center justify-center">
       <div className="container mx-auto px-4">
@@ -35,11 +37,18 @@ export function NotFoundPage() {
               >
                 <Home size={18} className="mr-2" />
                 На главную
-              </button>
-            </div>
+              </button>            </div>
           </div>
         </div>
       </div>
     </section>
+  );
+}
+
+export function NotFoundPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <NotFoundContent />
+    </Suspense>
   );
 }

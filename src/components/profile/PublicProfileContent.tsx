@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase'
 import ReadOnlyProductCard from '@/components/intrests/ReadOnlyIntrestsCard'
 import ProductCard, { DEFAULT_TAG } from '@/components/intrests/IntrestCard'
 import ProductForm from '@/components/intrests/IntrestsForm'
+import TagGroupedInterests from '@/components/intrests/TagGroupedInterests'
 import { PlusCircle } from 'lucide-react'
 import Image from 'next/image'
 import ProfileHeader from './ProfileHeader'
@@ -31,6 +32,13 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
   const [filteredLeftProducts, setFilteredLeftProducts] = useState<Product[]>([])
   const [filteredRightProducts, setFilteredRightProducts] = useState<Product[]>([])
   const [tagFilter, setTagFilter] = useState('')
+  const [isTagsViewActive, setIsTagsViewActive] = useState(false)
+  const [groupedByTagProducts, setGroupedByTagProducts] = useState<{
+    [tag: string]: {
+      left: Product[],
+      right: Product[]
+    }
+  }>({})
   const [isLoading, setIsLoading] = useState(true)
   const [profileNotFound, setProfileNotFound] = useState(false)
   const supabase = createClient()
@@ -113,7 +121,6 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
       fetchUserAndProducts();
     }
   }, [userId, supabase]);
-
   // Apply tag filter when tagFilter changes
   useEffect(() => {
     if (!tagFilter) {
@@ -157,7 +164,45 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
 
     setFilteredLeftProducts(filteredLeft);
     setFilteredRightProducts(filteredRight);
-  }, [tagFilter, leftProducts, rightProducts, isOwner]);  // Handler for tag click
+  }, [tagFilter, leftProducts, rightProducts, isOwner]);
+
+  // Group products by tags when products or filter changes
+  useEffect(() => {
+    // Create an object to hold grouped products
+    const grouped: {
+      [tag: string]: {
+        left: Product[],
+        right: Product[]
+      }
+    } = {};
+
+    // Process left products (likes)
+    const leftToProcess = tagFilter ? filteredLeftProducts : leftProducts;
+    leftToProcess.forEach(product => {
+      const tag = product.tag?.trim() || DEFAULT_TAG;
+      if (!grouped[tag]) {
+        grouped[tag] = { left: [], right: [] };
+      }
+      grouped[tag].left.push(product);
+    });
+
+    // Process right products (dislikes)
+    const rightToProcess = tagFilter ? filteredRightProducts : rightProducts;
+    rightToProcess.forEach(product => {
+      const tag = product.tag?.trim() || DEFAULT_TAG;
+      if (!grouped[tag]) {
+        grouped[tag] = { left: [], right: [] };
+      }
+      grouped[tag].right.push(product);
+    });
+
+    setGroupedByTagProducts(grouped);
+  }, [filteredLeftProducts, filteredRightProducts, leftProducts, rightProducts, tagFilter]);
+
+  // Toggle between tag view and normal view
+  const handleToggleTagsView = () => {
+    setIsTagsViewActive(prev => !prev);
+  };// Handler for tag click
   const handleTagClick = (tag: string) => {
     // Ensure we're working with a clean tag (no # prefix)
     const cleanTag = tag.startsWith('#') ? tag.substring(1) : tag;
@@ -198,14 +243,23 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
     setLeftProducts(prev => prev.filter(p => p.id !== productId))
     setRightProducts(prev => prev.filter(p => p.id !== productId))
   }
-
   const handleEditProduct = (product: Product) => {
+    // Just set the editing product, form will render inline
     setEditingProduct(product)
+    // Mark form visibility for the appropriate section (used for "Add" button logic)
     if (product.display_section === 'left') {
       setShowLeftForm(true)
     } else {
       setShowRightForm(true)
     }
+
+    // Scroll the edited product into view after a short delay
+    setTimeout(() => {
+      const productElement = document.getElementById(`intrests-${product.id}`)
+      if (productElement) {
+        productElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }, 100)
   }
 
   // Handler for image updates directly from ProductCard
@@ -279,37 +333,51 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
         userId={userId}
         tagFilter={tagFilter}
         onTagFilterChange={setTagFilter}
-      />
-
-      {/* Content container with grid sections */}
+        onToggleTagsView={handleToggleTagsView}
+        isTagsViewActive={isTagsViewActive}
+      />      {/* Content container with grid sections */}
       <div className="max-w-7xl mx-auto px-4">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative animate-fadeIn mt-4">
-          {/* Left Display Section - like interests */}
-          <section className="bg-white p-6 rounded-lg shadow-lg transition-all duration-300 hover:shadow-xl overflow-hidden relative">
-            {/* Rounded top border for "like" section */}
-            <div className="absolute top-0 left-0 right-0 h-2 bg-green-500 rounded-t-lg"></div>
+        {isTagsViewActive ? (
+          /* Tag-grouped view */
+          <div className="animate-fadeIn mt-4">
+            <TagGroupedInterests
+              groupedProducts={groupedByTagProducts}
+              isOwner={isOwner}
+              onDelete={handleDeleteProduct}
+              onEdit={handleEditProduct}
+              onTagClick={handleTagClick}
+              onImageUpdate={handleImageUpdate}
+              tagFilter={tagFilter}
+            />
+          </div>
+        ) : (
+          /* Standard view with two columns */
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative animate-fadeIn mt-4">
+            {/* Left Display Section - like interests */}
+            <section className="bg-white p-6 rounded-lg shadow-lg transition-all duration-300 hover:shadow-xl overflow-hidden relative">
+              {/* Rounded top border for "like" section */}
+              <div className="absolute top-0 left-0 right-0 h-2 bg-green-500 rounded-t-lg"></div>
 
-            <div className="flex flex-wrap justify-between items-center mb-4 gap-2 pt-2">
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-800">
-                  Нравится
-                </h2>
-                <Image
-                  src="/assets/like.png"
-                  width={32}
-                  height={32}
-                  alt="Like"
-                  className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8"
-                />
-              </div>
+              <div className="flex flex-wrap justify-between items-center mb-4 gap-2 pt-2">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-800">
+                    Нравится
+                  </h2>
+                  <Image
+                    src="/assets/like.png"
+                    width={32}
+                    height={32}
+                    alt="Like"
+                    className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8"
+                  />
+                </div>
 
-              {/* Show add button only for profile owner */}
-              {isOwner && (
-                <button
+                {/* Show add button only for profile owner */}
+                {isOwner && (<button
                   type="button"
                   onClick={() => {
-                    setEditingProduct(undefined)
-                    setShowLeftForm(true)
+                    setEditingProduct(undefined) // Clear any editing state
+                    setShowLeftForm(true) // Show the Add form at the top
                   }}
                   className="cursor-pointer px-2 py-1 text-xs sm:text-sm text-white bg-[#2daa4f] rounded-md hover:bg-[#249c47] transition-colors duration-200 whitespace-nowrap transform hover:scale-105 transition-transform duration-300 flex items-center gap-1"
                 >
@@ -317,29 +385,37 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
                   <span className="sm:hidden">Добавить</span>
                   <span className="hidden sm:inline">Добавить</span>
                 </button>
-              )}
-            </div>
+                )}            </div>
 
-            {/* Product form for owner */}
-            {isOwner && showLeftForm && currentUserId && (
-              <div className="mb-6 animate-slideDown">
-                <ProductForm
-                  userId={currentUserId}
-                  product={editingProduct?.display_section === 'left' ? editingProduct : undefined}
-                  section="left"
-                  onComplete={handleFormComplete}
-                  onCancel={() => {
-                    setShowLeftForm(false)
-                    setEditingProduct(undefined)
-                  }}
-                />
-              </div>
-            )}
-
-            <div className="space-y-4">
-              {filteredLeftProducts.length > 0 ? (
-                filteredLeftProducts.map(product => (
-                  isOwner ? (
+              {/* Show Add Form for owner when adding a new product (not editing) */}
+              {isOwner && showLeftForm && !editingProduct && currentUserId && (
+                <div className="mb-6 animate-slideDown">
+                  <ProductForm
+                    userId={currentUserId}
+                    section="left"
+                    onComplete={handleFormComplete}
+                    onCancel={() => {
+                      setShowLeftForm(false)
+                      setEditingProduct(undefined)
+                    }}
+                  />
+                </div>
+              )}<div className="space-y-4">
+                {filteredLeftProducts.length > 0 ? (
+                  filteredLeftProducts.map(product => (isOwner && editingProduct?.id === product.id && editingProduct.display_section === 'left' ? (
+                    <div key={product.id} className="animate-fadeIn bg-white p-4 rounded-lg shadow-md border-2 border-green-400">
+                      <ProductForm
+                        userId={currentUserId!}
+                        product={editingProduct}
+                        section="left"
+                        onComplete={handleFormComplete}
+                        onCancel={() => {
+                          setShowLeftForm(false)
+                          setEditingProduct(undefined)
+                        }}
+                      />
+                    </div>
+                  ) : isOwner ? (
                     <ProductCard
                       key={product.id}
                       product={product}
@@ -355,44 +431,43 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
                       onTagClick={handleTagClick}
                     />
                   )
-                ))
-              ) : (
-                <div className="py-10 text-center text-gray-500 animate-pulse">
-                  {tagFilter ? 'Ни один интерес не соответствует вашему фильтру.' : isOwner ? 'Нет интересов в Нравится. Добавьте свой первый интерес!' : 'Нет интересов в разделе "Нравится".'}
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* Vertical separator line */}
-          <div className="hidden lg:block absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-black to-transparent opacity-20 transform -translate-x-1/2"></div>
-
-          {/* Right Display Section dislike interests */}
-          <section className="bg-white p-6 rounded-lg shadow-lg transition-all duration-300 hover:shadow-xl overflow-hidden relative">
-            {/* Rounded top border for "dislike" section */}
-            <div className="absolute top-0 left-0 right-0 h-2 bg-red-500 rounded-t-lg"></div>
-
-            <div className="flex flex-wrap justify-between items-center mb-4 gap-2 pt-2">
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-800">
-                  Не Нравится
-                </h2>
-                <Image
-                  src="/assets/dislike.png"
-                  width={32}
-                  height={32}
-                  alt="Dislike"
-                  className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8"
-                />
+                  ))
+                ) : (
+                  <div className="py-10 text-center text-gray-500 animate-pulse">
+                    {tagFilter ? 'Ни один интерес не соответствует вашему фильтру.' : isOwner ? 'Нет интересов в Нравится. Добавьте свой первый интерес!' : 'Нет интересов в разделе "Нравится".'}
+                  </div>
+                )}
               </div>
+            </section>
 
-              {/* Show add button only for profile owner */}
-              {isOwner && (
-                <button
+            {/* Vertical separator line */}
+            <div className="hidden lg:block absolute left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-black to-transparent opacity-20 transform -translate-x-1/2"></div>
+
+            {/* Right Display Section dislike interests */}
+            <section className="bg-white p-6 rounded-lg shadow-lg transition-all duration-300 hover:shadow-xl overflow-hidden relative">
+              {/* Rounded top border for "dislike" section */}
+              <div className="absolute top-0 left-0 right-0 h-2 bg-red-500 rounded-t-lg"></div>
+
+              <div className="flex flex-wrap justify-between items-center mb-4 gap-2 pt-2">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-800">
+                    Не Нравится
+                  </h2>
+                  <Image
+                    src="/assets/dislike.png"
+                    width={32}
+                    height={32}
+                    alt="Dislike"
+                    className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8"
+                  />
+                </div>
+
+                {/* Show add button only for profile owner */}
+                {isOwner && (<button
                   type="button"
                   onClick={() => {
-                    setEditingProduct(undefined)
-                    setShowRightForm(true)
+                    setEditingProduct(undefined) // Clear any editing state
+                    setShowRightForm(true) // Show the Add form at the top
                   }}
                   className="cursor-pointer px-2 py-1 text-xs sm:text-sm text-white bg-[#f05d4d] rounded-md hover:bg-[#e04d3e] transition-colors duration-200 whitespace-nowrap transform hover:scale-105 transition-transform duration-300 flex items-center gap-1"
                 >
@@ -400,29 +475,37 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
                   <span className="sm:hidden">Добавить</span>
                   <span className="hidden sm:inline">Добавить</span>
                 </button>
-              )}
-            </div>
+                )}            </div>
 
-            {/* Product form for owner */}
-            {isOwner && showRightForm && currentUserId && (
-              <div className="mb-6 animate-slideDown">
-                <ProductForm
-                  userId={currentUserId}
-                  product={editingProduct?.display_section === 'right' ? editingProduct : undefined}
-                  section="right"
-                  onComplete={handleFormComplete}
-                  onCancel={() => {
-                    setShowRightForm(false)
-                    setEditingProduct(undefined)
-                  }}
-                />
-              </div>
-            )}
-
-            <div className="space-y-4">
-              {filteredRightProducts.length > 0 ? (
-                filteredRightProducts.map(product => (
-                  isOwner ? (
+              {/* Show Add Form for owner when adding a new product (not editing) */}
+              {isOwner && showRightForm && !editingProduct && currentUserId && (
+                <div className="mb-6 animate-slideDown">
+                  <ProductForm
+                    userId={currentUserId}
+                    section="right"
+                    onComplete={handleFormComplete}
+                    onCancel={() => {
+                      setShowRightForm(false)
+                      setEditingProduct(undefined)
+                    }}
+                  />
+                </div>
+              )}<div className="space-y-4">
+                {filteredRightProducts.length > 0 ? (
+                  filteredRightProducts.map(product => (isOwner && editingProduct?.id === product.id && editingProduct.display_section === 'right' ? (
+                    <div key={product.id} className="animate-fadeIn bg-white p-4 rounded-lg shadow-md border-2 border-red-400">
+                      <ProductForm
+                        userId={currentUserId!}
+                        product={editingProduct}
+                        section="right"
+                        onComplete={handleFormComplete}
+                        onCancel={() => {
+                          setShowRightForm(false)
+                          setEditingProduct(undefined)
+                        }}
+                      />
+                    </div>
+                  ) : isOwner ? (
                     <ProductCard
                       key={product.id}
                       product={product}
@@ -438,15 +521,16 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
                       onTagClick={handleTagClick}
                     />
                   )
-                ))
-              ) : (
-                <div className="py-10 text-center text-gray-500 animate-pulse">
-                  {tagFilter ? 'Ни один интерес не соответствует вашему фильтру.' : isOwner ? 'Нет интересов в Не Нравится. Добавьте свой первый интерес!' : 'Нет интересов в разделе "Не Нравится".'}
-                </div>
-              )}
-            </div>
-          </section>
-        </div>
+                  ))
+                ) : (
+                  <div className="py-10 text-center text-gray-500 animate-pulse">
+                    {tagFilter ? 'Ни один интерес не соответствует вашему фильтру.' : isOwner ? 'Нет интересов в Не Нравится. Добавьте свой первый интерес!' : 'Нет интересов в разделе "Не Нравится".'}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
       </div>
     </div>
   )
