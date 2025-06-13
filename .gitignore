@@ -9,7 +9,8 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
-
+GOOGLE_OAUTH_SETUP.md
+IMPLEMENTATION_SUMMARY.md
 # testing
 /coverage
 .github/*

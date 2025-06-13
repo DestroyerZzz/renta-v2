@@ -12,18 +12,28 @@ export default function PublicProfileLayout({ children }: { children: React.Reac
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const supabase = createClient()
-
-  // Check authentication status
+  // Check authentication status and listen for changes
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         setIsAuthenticated(!!user)
+        console.log('Auth check:', user ? `authenticated as ${user.email}` : 'not authenticated')
       } catch (error) {
         console.error('Error checking auth:', error)
       }
     }
+
+    // Initial check
     checkAuth()
+
+    // Listen for auth state changes (important for OAuth flows)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event, session?.user ? `user: ${session.user.email}` : 'no user')
+      setIsAuthenticated(!!session?.user)
+    })
+
+    return () => subscription.unsubscribe()
   }, [supabase])
 
   // Handle logout
@@ -61,7 +71,7 @@ export default function PublicProfileLayout({ children }: { children: React.Reac
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="inline-flex items-center justify-center p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 transition-colors duration-300"
                 aria-controls="mobile-menu"
-                aria-expanded={mobileMenuOpen ? 'true' : 'false'}
+                aria-expanded={mobileMenuOpen}
                 aria-label="Main menu"
               >
                 {mobileMenuOpen ? (
@@ -84,7 +94,7 @@ export default function PublicProfileLayout({ children }: { children: React.Reac
                 className="px-2 py-1 text-sm font-medium rounded-md flex items-center space-x-1 text-gray-700 hover:text-gray-900 transition-colors duration-300"
               >
                 <UserIcon className="w-4 h-4" />
-                <span>профиль</span>
+                <span>Профиль</span>
               </Link>
               <Link
                 href="/notifications"

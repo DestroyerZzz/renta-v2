@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase'
 import Link from 'next/link'
 import { Mail, Lock } from 'lucide-react'
+import GoogleSignInButton from './GoogleSignInButton'
 
 export default function SignIn() {
   const [email, setEmail] = useState('')
@@ -67,15 +68,26 @@ export default function SignIn() {
           <p className="mt-2 text-sm text-gray-600">
             Добро пожаловать обратно! Войдите в свой аккаунт
           </p>
-        </div>
-
-        {error && (
+        </div>        {error && (
           <div className="p-3 text-sm text-red-600 bg-red-100 rounded-md">
             {error}
           </div>
         )}
 
-        <form className="mt-8 space-y-6" onSubmit={handleSignIn}>
+        {/* Google Sign In Button */}
+        <GoogleSignInButton />
+
+        {/* Divider */}
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white text-gray-500">или</span>
+          </div>
+        </div>
+
+        <form className="space-y-6" onSubmit={handleSignIn}>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">
               Адрес электронной почты

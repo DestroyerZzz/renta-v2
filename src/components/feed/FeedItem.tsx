@@ -88,17 +88,14 @@ export default function FeedItem({ product }: FeedItemProps) {
                 {/* Content section */}
                 <div>
                     {/* Title */}
-                    <h3 className="text-gray-700 font-semibold text-lg mb-2">{title || 'Без названия'}</h3>
-
-                    {/* Image if available */}
+                    <h3 className="text-gray-700 font-semibold text-lg mb-2">{title || 'Без названия'}</h3>                    {/* Image if available */}
                     {image_url && (
-                        <div className="mb-3 rounded-md overflow-hidden">
+                        <div className="mb-3 rounded-md overflow-hidden aspect-square relative max-w-[200px] ">
                             <SupabaseImage
                                 src={image_url}
                                 alt={title || 'Product Image'}
-                                width={600}
-                                height={400}
-                                className="w-full h-auto object-cover max-h-80"
+                                fill
+                                className="object-cover"
                             />
                         </div>
                     )}

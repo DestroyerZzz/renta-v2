@@ -17,8 +17,8 @@ export const metadata: Metadata = {
   title: "Product Dashboard",
   description: "A product management dashboard built with Next.js and Supabase By DR-Ninja",
   keywords: ["интересы", "панель приборов", "управление", " инвентарь", "управление интересами"],
-  authors: [{ name: "Mohamed Foad & Mr.Lahony" }],
-  creator: "Mohamed Foad & Mr.Lahony",
+  authors: [{ name: "Mohamed Foad & Front2Back" }],
+  creator: "Mohamed Foad & Front2Back",
   publisher: "Dr-Ninja",
   icons: {
     icon: "/logo.png",

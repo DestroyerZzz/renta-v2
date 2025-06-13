@@ -7,6 +7,7 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { debounce } from 'lodash'
 import { AlertCircle, Check, Loader2, User, X, Mail, Lock } from 'lucide-react'
+import GoogleSignInButton from './GoogleSignInButton'
 
 export default function SignUp() {
   const [email, setEmail] = useState('')
@@ -68,7 +69,6 @@ export default function SignUp() {
 
   // Debounced function to avoid too many database queries while typing
   const debouncedCheckUsername = debounce(checkUsernameExists, 500);
-
   // Effect to check username when it changes
   useEffect(() => {
     if (username) {
@@ -81,7 +81,7 @@ export default function SignUp() {
     return () => {
       debouncedCheckUsername.cancel();
     };
-  }, [username]);
+  }, [username, debouncedCheckUsername]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -286,16 +286,27 @@ export default function SignUp() {
           <p className="mt-2 text-sm text-gray-600">
             Зарегистрируйте новую учетную запись
           </p>
-        </div>
-
-        {error && (
+        </div>        {error && (
           <div className="p-3 text-sm text-red-600 bg-red-100 rounded-md flex items-start">
             <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        <form className="mt-8 space-y-6" onSubmit={handleSignUp}>
+        {/* Google Sign In Button */}
+        <GoogleSignInButton />
+
+        {/* Divider */}
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white text-gray-500">или</span>
+          </div>
+        </div>
+
+        <form className="space-y-6" onSubmit={handleSignUp}>
           <div>
             <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
               ФИО
@@ -333,10 +344,10 @@ export default function SignUp() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className={`block text-black w-full pl-10 pr-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${isUsernameAvailable === false
-                    ? 'border-red-300 bg-red-50'
-                    : isUsernameAvailable === true && !usernameError
-                      ? 'border-green-300 bg-green-50'
-                      : 'border-gray-300'
+                  ? 'border-red-300 bg-red-50'
+                  : isUsernameAvailable === true && !usernameError
+                    ? 'border-green-300 bg-green-50'
+                    : 'border-gray-300'
                   }`}
                 placeholder="Уникальное имя пользователя"
                 minLength={3}
