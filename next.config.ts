@@ -3,13 +3,24 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   images: {
     // Allow images from the Supabase domain
-    domains: ["jhsxcdnygnqpvqbephkz.supabase.co"],
+    domains: [
+      "hoeawwtkoongxratcaau.supabase.co",
+      "lh3.googleusercontent.com",
+      "lh4.googleusercontent.com",
+      "lh5.googleusercontent.com",
+      "l65.googleusercontent.com",
+],
     // More specific pattern matching for different URL structures
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'jhsxcdnygnqpvqbephkz.supabase.co',
+        hostname: 'hoeawwtkoongxratcaau.supabase.co',
         pathname: '/**', // Allow any path structure
+      },
+      {
+       protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+        pathname: '/**', 
       },
     ],
     // Disable unoptimized for production to use Next.js image optimization
