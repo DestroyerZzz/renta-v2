@@ -7,7 +7,6 @@ import SupabaseImage from '@/components/ui/SupabaseImage'
 import { Edit, Camera, Image, User, Check, X, AlertCircle, Loader2 } from 'lucide-react'
 import { debounce } from 'lodash'
 import toast from 'react-hot-toast'
-import optimizeImage from '@/utils/imageOptimizer'
 
 export default function ProfilePage() {
   const [fullName, setFullName] = useState('')
@@ -25,10 +24,6 @@ export default function ProfilePage() {
   const [isUsernameAvailable, setIsUsernameAvailable] = useState<boolean | null>(null)
   const [usernameError, setUsernameError] = useState<string | null>(null)
   const [originalUsername, setOriginalUsername] = useState<string | null>(null)
-  const [avatarProgress, setAvatarProgress] = useState(0)
-  const [coverProgress, setCoverProgress] = useState(0)
-  const [isOptimizingAvatar, setIsOptimizingAvatar] = useState(false)
-  const [isOptimizingCover, setIsOptimizingCover] = useState(false)
 
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
@@ -209,7 +204,6 @@ export default function ProfilePage() {
       debouncedCheckUsername.cancel();
     };
   }, [username, debouncedCheckUsername]);
-
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
@@ -221,44 +215,10 @@ export default function ProfilePage() {
       }
       reader.readAsDataURL(file)
 
-      try {
-        // Reset progress and set optimizing state
-        setAvatarProgress(0)
-        setIsOptimizingAvatar(true)
-
-        // Optimize the avatar image - use higher quality for avatars
-        const optimizedFile = await optimizeImage(file, {
-          maxSizeMB: 0.5,
-          maxWidthOrHeight: 400, // Appropriate for profile pictures
-          quality: 0.85,
-          useWebP: true,
-          onProgress: (progress) => {
-            // Ensure progress is an integer for proper style generation
-            setAvatarProgress(Math.round(progress))
-          }
-        })
-
-        // Set progress to 100% when complete
-        setAvatarProgress(100)
-        setAvatarFile(optimizedFile)
-
-        // Log optimization results
-        console.log(`Avatar original size: ${(file.size / 1024).toFixed(2)} KB`)
-        console.log(`Avatar optimized size: ${(optimizedFile.size / 1024).toFixed(2)} KB`)
-        console.log(`Avatar reduction: ${((1 - optimizedFile.size / file.size) * 100).toFixed(1)}%`)
-      } catch (err) {
-        console.error('Error optimizing avatar image:', err)
-        // Fallback to original file if optimization fails
-        setAvatarFile(file)
-      } finally {
-        // Wait a moment to show the 100% progress before hiding
-        setTimeout(() => {
-          setIsOptimizingAvatar(false)
-        }, 500)
-      }
+      // Set the file directly without optimization
+      setAvatarFile(file)
     }
   }
-
   const handleCoverImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
@@ -268,41 +228,10 @@ export default function ProfilePage() {
       reader.onload = () => {
         setCoverImageUrl(reader.result as string)
       }
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(file)
 
-      try {
-        setIsOptimizingCover(true)
-        setCoverProgress(0)
-
-        // Optimize the cover image - covers can be larger but still optimized
-        const optimizedFile = await optimizeImage(file, {
-          maxSizeMB: 1,
-          maxWidthOrHeight: 1920, // Cover images can be larger
-          quality: 0.75,
-          useWebP: true,
-          onProgress: (progress) => {
-            setCoverProgress(Math.round(progress))
-          }
-        })
-
-        // Set progress to 100% when complete
-        setCoverProgress(100)
-        setCoverImageFile(optimizedFile)
-
-        // Log optimization results
-        console.log(`Cover original size: ${(file.size / 1024).toFixed(2)} KB`)
-        console.log(`Cover optimized size: ${(optimizedFile.size / 1024).toFixed(2)} KB`)
-        console.log(`Cover reduction: ${((1 - optimizedFile.size / file.size) * 100).toFixed(1)}%`)
-      } catch (err) {
-        console.error('Error optimizing cover image:', err)
-        // Fallback to original file if optimization fails
-        setCoverImageFile(file)
-      } finally {
-        // Wait a moment to show the 100% progress before hiding
-        setTimeout(() => {
-          setIsOptimizingCover(false)
-        }, 500)
-      }
+      // Set the file directly without optimization
+      setCoverImageFile(file)
     }
   }
 
@@ -422,15 +351,10 @@ export default function ProfilePage() {
         // Validate file size (max 2MB)
         if (avatarFile.size > 2 * 1024 * 1024) {
           throw new Error('Размер файла аватара не должен превышать 2MB');
-        }
-
-        // Create proper file path structure
+        }        // Create proper file path structure
         const fileExt = avatarFile.name.split('.').pop();
         const fileName = `${uuidv4()}.${fileExt}`;
         const filePath = `${userId}/${fileName}`;
-
-        // Log size of optimized avatar image for monitoring
-        console.log(`Uploading optimized avatar: ${avatarFile.size / 1024} KB`);
 
         // First ensure the profile exists before uploading
         const { error: profileCheckError } = await supabase
@@ -501,7 +425,6 @@ export default function ProfilePage() {
         const filePath = `${userId}/${fileName}`;
 
         // Log size of optimized cover image for monitoring
-        console.log(`Uploading optimized cover image: ${coverImageFile.size / 1024} KB`);
 
         // Upload the cover image
         const { error: uploadError } = await supabase.storage
@@ -572,15 +495,8 @@ export default function ProfilePage() {
         text: error instanceof Error ? error.message : 'Неизвестная ошибка'
       });
     } finally {
-      setIsSaving(false);
-    }
+      setIsSaving(false);    }
   };
-
-  // Helper function to generate width classes from progress percentage
-  const getProgressBarWidthClass = (progress: number): string => {
-    const roundedProgress = Math.floor(progress / 10) * 10;
-    return `w-[${roundedProgress}%]`;
-  }
 
   if (isLoading) {
     return (
@@ -632,19 +548,7 @@ export default function ProfilePage() {
                     />
                   )
                 ) : (
-                  <div className="flex items-center justify-center h-full bg-gray-200 hover:bg-gray-100 cursor-pointer transition-colors duration-300" onClick={triggerCoverInput}>
-                    <Image size={32} className="text-gray-400" aria-label="Upload cover image" />
-                  </div>
-                )}
-
-                {/* Cover image optimization progress overlay */}
-                {isOptimizingCover && (
-                  <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center text-white">
-                    <Loader2 size={24} className="animate-spin mb-2" />
-                    <p className="text-sm mb-1">Оптимизация: {coverProgress}%</p>
-                    <div className="w-4/5 bg-gray-700 rounded-full h-1.5 mt-1 overflow-hidden">
-                      <div className={`bg-white h-1.5 rounded-full transition-all duration-300 ${getProgressBarWidthClass(coverProgress)}`}></div>
-                    </div>
+                  <div className="flex items-center justify-center h-full bg-gray-200 hover:bg-gray-100 cursor-pointer transition-colors duration-300" onClick={triggerCoverInput}>                    <Image size={32} className="text-gray-400" aria-label="Upload cover image" />
                   </div>
                 )}
 
@@ -704,24 +608,10 @@ export default function ProfilePage() {
                         className="w-full h-full object-cover absolute inset-0"
                         quality={90}
                         sizes="128px"
-                      />
-                    )
+                      />                    )
                   ) : (
                     <div className="h-full w-full flex items-center justify-center bg-gray-200">
                       <Camera size={24} className="text-gray-400" />
-                    </div>
-                  )}
-
-                  {/* Avatar optimization progress overlay */}
-                  {isOptimizingAvatar && (
-                    <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center text-white">
-                      <Loader2 size={20} className="animate-spin mb-1" />
-                      <p className="text-xs font-medium">
-                        {avatarProgress}%
-                      </p>
-                      <div className="w-4/5 h-1 mt-1 bg-gray-700 rounded-full overflow-hidden">
-                        <div className={`h-full bg-white rounded-full ${getProgressBarWidthClass(avatarProgress)}`}></div>
-                      </div>
                     </div>
                   )}
                 </div>
@@ -797,12 +687,11 @@ export default function ProfilePage() {
                 Ваш профиль будет доступен по адресу: {window.location.origin}/profile/{username}
               </p>
             )}
-          </div>
-
-          {/* Submit Button */}
-          <div>            <button
+          </div>          {/* Submit Button */}
+          <div>
+            <button
             type="submit"
-            disabled={isSaving || isCheckingUsername || isUsernameAvailable === false || isOptimizingAvatar || isOptimizingCover}
+            disabled={isSaving || isCheckingUsername || isUsernameAvailable === false}
             className="cursor-pointer w-full px-4 py-2 text-sm font-medium text-white bg-[#3d82f7] border border-transparent rounded-md shadow-sm hover:bg-[#2d6ce0] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
           >
             {isSaving ? 'Сохранение...' : 'Сохранить профиль'}
