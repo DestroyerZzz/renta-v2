@@ -143,11 +143,14 @@ export const optimizeImage = async (
                     options.maxSmartDimension || 400
                 );
                 
-                console.log(`Smart resizing: ${originalWidth}x${originalHeight} → ${smartDimensions.width}x${smartDimensions.height}`);                try {
+                console.log(`Smart resizing: ${originalWidth}x${originalHeight} → ${smartDimensions.width}x${smartDimensions.height}`);
+                
+                try {
                     processedFile = await smartResizeImage(
                         imageFile,
                         smartDimensions.width,
-                        smartDimensions.height
+                        smartDimensions.height,
+                        0.95 // Use high quality for resize step
                     );
                     updateProgress(14);
                     
@@ -165,13 +168,13 @@ export const optimizeImage = async (
 
         // Update progress - preparing for compression
         updateProgress(15);        // Use browser-image-compression library for optimization
-        // Use minimal compression to preserve quality after smart resize
+        // Use gentler compression since we may have already resized
         const compressionOptions = {
             maxSizeMB: options.maxSizeMB,
             maxWidthOrHeight: options.maxWidthOrHeight,
             useWebWorker: true,
-            // Use maximum quality if we've already resized the image
-            initialQuality: processedFile !== imageFile ? 1.0 : options.quality,
+            // Use higher quality if we've already resized the image
+            initialQuality: processedFile !== imageFile ? 0.9 : options.quality,
             // Add more options for better compression
             fileType,
             alwaysKeepResolution: false, // Allow resizing if needed
@@ -181,17 +184,13 @@ export const optimizeImage = async (
                 const mappedProgress = 15 + (progress * 0.5);
                 updateProgress(mappedProgress);
             }
-        };        // Determine if we should use WebP (disabled for resized images to preserve quality)
-        const useWebP = options.useWebP && isWebPSupported() && processedFile === imageFile;        // Compress the image (skip compression for resized images to preserve quality)
-        let compressedFile = processedFile;
-        
-        if (processedFile === imageFile) {
-            // Only compress if we haven't resized (original image)
-            compressedFile = await imageCompression(processedFile, compressionOptions);
-        } else {
-            // For resized images, skip compression to preserve quality
-            console.log('Skipping compression for resized image to preserve quality');
-        }
+        };
+
+        // Determine if we should use WebP
+        const useWebP = options.useWebP && isWebPSupported();
+
+        // Compress the image (use processed file which may be resized)
+        let compressedFile = await imageCompression(processedFile, compressionOptions);
 
         // Update progress - compression done, preparing for WebP conversion if needed
         updateProgress(70);        // If compression made the file larger (which can happen with already optimized images),
@@ -201,12 +200,13 @@ export const optimizeImage = async (
         }
 
         let finalFile = compressedFile;
-        let finalSize = compressedFile.size / 1024;        // If WebP is supported and enabled, convert to WebP format
+        let finalSize = compressedFile.size / 1024;
+
+        // If WebP is supported and enabled, convert to WebP format
         if (useWebP && !fileType.includes('webp')) {
             updateProgress(75);
             try {
-                // Use maximum quality for WebP conversion to preserve original quality
-                const compressedBlob = await convertToWebP(compressedFile, 1.0);
+                const compressedBlob = await convertToWebP(compressedFile, options.quality!);
                 updateProgress(85);
                 const webpFile = new File(
                     [compressedBlob],
@@ -371,272 +371,58 @@ const calculateSmartDimensions = (
 };
 
 /**
- * Smart resize image using canvas with pixel-perfect quality preservation
+ * Smart resize image using canvas to preserve aspect ratio and improve quality
  * 
  * @param {File} file - The image file to resize
  * @param {number} targetWidth - Target width
  * @param {number} targetHeight - Target height
- * @returns {Promise<File>} - Resized image file with maximum quality
+ * @param {number} quality - Image quality for output
+ * @returns {Promise<File>} - Resized image file
  */
 const smartResizeImage = async (
     file: File,
     targetWidth: number,
-    targetHeight: number
+    targetHeight: number,
+    quality: number
 ): Promise<File> => {
     try {
-        // Create image element for loading
-        const img = new Image();
+        // Create image bitmap from file
+        const bitmap = await createImageBitmap(file);
         
+        // Create canvas with target dimensions
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas 2D context not available');
+        
+        // Enable image smoothing for better quality
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        // Draw resized image
+        ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+        
+        // Convert to blob with high quality
         return new Promise((resolve, reject) => {
-            img.onload = async () => {
-                try {
-                    const originalWidth = img.width;
-                    const originalHeight = img.height;
-                    
-                    // If the image is already smaller than or equal to target, return as-is
-                    if (originalWidth <= targetWidth && originalHeight <= targetHeight) {
-                        URL.revokeObjectURL(img.src);
-                        resolve(file);
-                        return;
-                    }
-                    
-                    // Calculate scaling factor
-                    const scaleX = targetWidth / originalWidth;
-                    const scaleY = targetHeight / originalHeight;
-                    const scale = Math.min(scaleX, scaleY);
-                    
-                    // Use progressive downscaling for better quality (like Photoshop)
-                    // Only use progressive if we're scaling down significantly (less than 0.5)
-                    let resizedFile;
-                    if (scale < 0.5) {
-                        resizedFile = await progressiveDownscale(img, targetWidth, targetHeight, file);
-                    } else {
-                        resizedFile = await singleStepResize(img, targetWidth, targetHeight, file);
-                    }
-                    
-                    URL.revokeObjectURL(img.src);
+            canvas.toBlob(blob => {
+                if (blob) {
+                    const resizedFile = new File(
+                        [blob],
+                        file.name,
+                        { type: file.type || 'image/jpeg' }
+                    );
                     resolve(resizedFile);
-                } catch (canvasError) {
-                    URL.revokeObjectURL(img.src);
-                    reject(canvasError);
+                } else {
+                    reject(new Error('Failed to resize image'));
                 }
-            };
-            
-            img.onerror = () => {
-                URL.revokeObjectURL(img.src);
-                reject(new Error('Failed to load image for resizing'));
-            };
-            
-            img.src = URL.createObjectURL(file);
+            }, file.type || 'image/jpeg', quality);
         });
     } catch (error) {
         console.error('Error in smart resize:', error);
         throw error;
     }
-};
-
-/**
- * Progressive downscaling with advanced interpolation for crystal-clear results
- * Uses techniques from professional image editing software
- */
-const progressiveDownscale = async (
-    img: HTMLImageElement,
-    targetWidth: number,
-    targetHeight: number,
-    originalFile: File
-): Promise<File> => {
-    let currentWidth = img.width;
-    let currentHeight = img.height;
-    
-    // Create initial canvas with original image
-    let currentCanvas = document.createElement('canvas');
-    currentCanvas.width = currentWidth;
-    currentCanvas.height = currentHeight;
-    
-    let ctx = currentCanvas.getContext('2d', {
-        alpha: originalFile.type.includes('png'),
-        desynchronized: false,
-        colorSpace: 'srgb'
-    });
-    if (!ctx) throw new Error('Canvas 2D context not available');
-    
-    // Disable smoothing for pixel-perfect initial copy
-    ctx.imageSmoothingEnabled = false;
-    
-    // Draw original image at full resolution
-    ctx.drawImage(img, 0, 0);
-    
-    // Progressive downscaling with optimized step size (67% instead of 50% for better quality)
-    const stepFactor = 0.67; // More gradual downscaling preserves more detail
-    
-    while (currentWidth > targetWidth * 1.5 || currentHeight > targetHeight * 1.5) {
-        const nextWidth = Math.max(Math.floor(currentWidth * stepFactor), targetWidth);
-        const nextHeight = Math.max(Math.floor(currentHeight * stepFactor), targetHeight);
-        
-        // Create new canvas for this step
-        const nextCanvas = document.createElement('canvas');
-        nextCanvas.width = nextWidth;
-        nextCanvas.height = nextHeight;
-        
-        const nextCtx = nextCanvas.getContext('2d', {
-            alpha: originalFile.type.includes('png'),
-            desynchronized: false,
-            colorSpace: 'srgb'
-        });
-        if (!nextCtx) throw new Error('Canvas 2D context not available');
-        
-        // Use bicubic-like interpolation for smooth downscaling
-        nextCtx.imageSmoothingEnabled = true;
-        nextCtx.imageSmoothingQuality = 'high';
-        
-        // Apply sharpening technique: scale down slightly more, then scale back up
-        const tempWidth = Math.floor(nextWidth * 0.98);
-        const tempHeight = Math.floor(nextHeight * 0.98);
-        
-        if (tempWidth > 0 && tempHeight > 0 && (currentWidth / tempWidth > 1.1)) {
-            // Create temporary canvas for sharpening effect
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = tempWidth;
-            tempCanvas.height = tempHeight;
-            const tempCtx = tempCanvas.getContext('2d');
-            
-            if (tempCtx) {
-                tempCtx.imageSmoothingEnabled = true;
-                tempCtx.imageSmoothingQuality = 'high';
-                tempCtx.drawImage(currentCanvas, 0, 0, tempWidth, tempHeight);
-                
-                // Now scale back up to target size with sharpening
-                nextCtx.imageSmoothingEnabled = true;
-                nextCtx.imageSmoothingQuality = 'high';
-                nextCtx.drawImage(tempCanvas, 0, 0, nextWidth, nextHeight);
-            } else {
-                // Fallback to direct resize
-                nextCtx.drawImage(currentCanvas, 0, 0, nextWidth, nextHeight);
-            }
-        } else {
-            // Direct resize for small changes
-            nextCtx.drawImage(currentCanvas, 0, 0, nextWidth, nextHeight);
-        }
-        
-        // Update for next iteration
-        currentCanvas = nextCanvas;
-        currentWidth = nextWidth;
-        currentHeight = nextHeight;
-        ctx = nextCtx;
-    }
-    
-    // Final step: resize to exact target dimensions with pixel-perfect precision
-    if (currentWidth !== targetWidth || currentHeight !== targetHeight) {
-        const finalCanvas = document.createElement('canvas');
-        finalCanvas.width = targetWidth;
-        finalCanvas.height = targetHeight;
-        
-        const finalCtx = finalCanvas.getContext('2d', {
-            alpha: originalFile.type.includes('png'),
-            desynchronized: false,
-            colorSpace: 'srgb'
-        });
-        if (!finalCtx) throw new Error('Canvas 2D context not available');
-        
-        // Use the highest quality settings for final resize
-        finalCtx.imageSmoothingEnabled = true;
-        finalCtx.imageSmoothingQuality = 'high';
-        
-        // Apply subtle contrast enhancement for sharper final result
-        finalCtx.filter = 'contrast(1.02) saturate(1.01)';
-        finalCtx.drawImage(currentCanvas, 0, 0, targetWidth, targetHeight);
-        finalCtx.filter = 'none'; // Reset filter
-        
-        currentCanvas = finalCanvas;
-    }
-    
-    // Convert to blob with maximum quality and optimized settings
-    return new Promise((resolve, reject) => {
-        const outputType = originalFile.type || 'image/jpeg';
-        
-        if (outputType.includes('png')) {
-            // PNG: No compression, perfect quality
-            currentCanvas.toBlob(blob => {
-                if (blob) {
-                    const resizedFile = new File([blob], originalFile.name, { type: outputType });
-                    resolve(resizedFile);
-                } else {
-                    reject(new Error('Failed to resize PNG image'));
-                }
-            }, outputType);
-        } else {
-            // JPEG: Maximum quality with optimized encoding
-            currentCanvas.toBlob(blob => {
-                if (blob) {
-                    const resizedFile = new File([blob], originalFile.name, { type: outputType });
-                    resolve(resizedFile);
-                } else {
-                    reject(new Error('Failed to resize JPEG image'));
-                }
-            }, outputType, 1.0);
-        }
-    });
-};
-
-/**
- * Single-step resize with advanced quality preservation for smaller scaling operations
- */
-const singleStepResize = async (
-    img: HTMLImageElement,
-    targetWidth: number,
-    targetHeight: number,
-    originalFile: File
-): Promise<File> => {
-    const canvas = document.createElement('canvas');
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-    
-    const ctx = canvas.getContext('2d', {
-        alpha: originalFile.type.includes('png'),
-        desynchronized: false,
-        colorSpace: 'srgb'
-    });
-    if (!ctx) throw new Error('Canvas 2D context not available');
-    
-    // Use highest quality settings
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    
-    // Apply subtle sharpening filter for crisp results
-    ctx.filter = 'contrast(1.01) saturate(1.005) brightness(1.002)';
-    
-    // Draw resized image
-    ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-    
-    // Reset filter
-    ctx.filter = 'none';
-    
-    // Convert to blob with maximum quality
-    return new Promise((resolve, reject) => {
-        const outputType = originalFile.type || 'image/jpeg';
-        
-        if (outputType.includes('png')) {
-            // PNG: No compression, perfect quality
-            canvas.toBlob(blob => {
-                if (blob) {
-                    const resizedFile = new File([blob], originalFile.name, { type: outputType });
-                    resolve(resizedFile);
-                } else {
-                    reject(new Error('Failed to resize PNG image'));
-                }
-            }, outputType);
-        } else {
-            // JPEG: Maximum quality with optimized encoding
-            canvas.toBlob(blob => {
-                if (blob) {
-                    const resizedFile = new File([blob], originalFile.name, { type: outputType });
-                    resolve(resizedFile);
-                } else {
-                    reject(new Error('Failed to resize JPEG image'));
-                }
-            }, outputType, 1.0);
-        }
-    });
 };
 
 export default optimizeImage;
