@@ -144,13 +144,12 @@ export const optimizeImage = async (
                 );
                 
                 console.log(`Smart resizing: ${originalWidth}x${originalHeight} → ${smartDimensions.width}x${smartDimensions.height}`);
-                
-                try {
+                  try {
                     processedFile = await smartResizeImage(
                         imageFile,
                         smartDimensions.width,
                         smartDimensions.height,
-                        0.95 // Use high quality for resize step
+                        1.0 // Use maximum quality to preserve original quality
                     );
                     updateProgress(14);
                     
@@ -168,13 +167,13 @@ export const optimizeImage = async (
 
         // Update progress - preparing for compression
         updateProgress(15);        // Use browser-image-compression library for optimization
-        // Use gentler compression since we may have already resized
+        // Use minimal compression to preserve quality after smart resize
         const compressionOptions = {
             maxSizeMB: options.maxSizeMB,
             maxWidthOrHeight: options.maxWidthOrHeight,
             useWebWorker: true,
-            // Use higher quality if we've already resized the image
-            initialQuality: processedFile !== imageFile ? 0.9 : options.quality,
+            // Use maximum quality if we've already resized the image
+            initialQuality: processedFile !== imageFile ? 1.0 : options.quality,
             // Add more options for better compression
             fileType,
             alwaysKeepResolution: false, // Allow resizing if needed
@@ -200,13 +199,12 @@ export const optimizeImage = async (
         }
 
         let finalFile = compressedFile;
-        let finalSize = compressedFile.size / 1024;
-
-        // If WebP is supported and enabled, convert to WebP format
+        let finalSize = compressedFile.size / 1024;        // If WebP is supported and enabled, convert to WebP format
         if (useWebP && !fileType.includes('webp')) {
             updateProgress(75);
             try {
-                const compressedBlob = await convertToWebP(compressedFile, options.quality!);
+                // Use maximum quality for WebP conversion to preserve original quality
+                const compressedBlob = await convertToWebP(compressedFile, 1.0);
                 updateProgress(85);
                 const webpFile = new File(
                     [compressedBlob],
