@@ -27,13 +27,26 @@ export interface ImageOptimizationOptions {
     /**
      * Show optimization progress in the console (for debugging)
      */
-    debug?: boolean;
-
-    /**
+    debug?: boolean;    /**
      * Function to track progress during optimization
      * @param progress - Number between 0 and 100
      */
     onProgress?: (progress: number) => void;
+
+    /**
+     * Enable smart resizing for large images
+     */
+    enableSmartResize?: boolean;
+
+    /**
+     * Maximum dimension for smart resize (defaults to 400px for rectangles, 200px for squares)
+     */
+    maxSmartDimension?: number;
+
+    /**
+     * Minimum size to trigger smart resize (defaults to 800px)
+     */
+    resizeThreshold?: number;
 }
 
 /**
@@ -46,6 +59,9 @@ export const defaultOptions: ImageOptimizationOptions = {
     useWebP: true,
     debug: false,
     onProgress: undefined,
+    enableSmartResize: true,
+    maxSmartDimension: 400,
+    resizeThreshold: 800,
 };
 
 /**
@@ -101,20 +117,64 @@ export const optimizeImage = async (
         // Even if we skip optimization, show 100% progress
         updateProgress(100);
         return imageFile;
-    } try {
+    }    try {
+        // Get original image dimensions for smart resizing
+        let originalDimensions;
+        try {
+            originalDimensions = await getImageDimensions(imageFile);
+            updateProgress(10);        } catch {
+            console.warn('Could not get image dimensions, proceeding without smart resize');
+            originalDimensions = null;
+        }
+
+        // Check if we should apply smart resizing
+        let processedFile = imageFile;
+        if (options.enableSmartResize && originalDimensions) {
+            const { width: originalWidth, height: originalHeight } = originalDimensions;
+            const maxDimension = Math.max(originalWidth, originalHeight);
+            
+            // Apply smart resize if image is larger than threshold
+            if (maxDimension > (options.resizeThreshold || 800)) {
+                updateProgress(12);
+                
+                const smartDimensions = calculateSmartDimensions(
+                    originalWidth,
+                    originalHeight,
+                    options.maxSmartDimension || 400
+                );
+                
+                console.log(`Smart resizing: ${originalWidth}x${originalHeight} → ${smartDimensions.width}x${smartDimensions.height}`);
+                
+                try {
+                    processedFile = await smartResizeImage(
+                        imageFile,
+                        smartDimensions.width,
+                        smartDimensions.height,
+                        0.95 // Use high quality for resize step
+                    );
+                    updateProgress(14);
+                    
+                    const resizedSize = processedFile.size / 1024;
+                    console.log(`After smart resize: ${resizedSize.toFixed(2)} KB`);
+                } catch (resizeError) {
+                    console.warn('Smart resize failed, using original image:', resizeError);
+                    processedFile = imageFile;
+                }
+            }
+        }
+
         // Ensure we're using the correct MIME type
-        const fileType = imageFile.type || 'image/jpeg';
+        const fileType = processedFile.type || 'image/jpeg';
 
         // Update progress - preparing for compression
-        updateProgress(15);
-
-        // Use browser-image-compression library for optimization
-        // Add more aggressive compression parameters
+        updateProgress(15);        // Use browser-image-compression library for optimization
+        // Use gentler compression since we may have already resized
         const compressionOptions = {
             maxSizeMB: options.maxSizeMB,
             maxWidthOrHeight: options.maxWidthOrHeight,
             useWebWorker: true,
-            initialQuality: options.quality,
+            // Use higher quality if we've already resized the image
+            initialQuality: processedFile !== imageFile ? 0.9 : options.quality,
             // Add more options for better compression
             fileType,
             alwaysKeepResolution: false, // Allow resizing if needed
@@ -129,16 +189,14 @@ export const optimizeImage = async (
         // Determine if we should use WebP
         const useWebP = options.useWebP && isWebPSupported();
 
-        // Compress the image (force compression even for small images)
-        let compressedFile = await imageCompression(imageFile, compressionOptions);
+        // Compress the image (use processed file which may be resized)
+        let compressedFile = await imageCompression(processedFile, compressionOptions);
 
         // Update progress - compression done, preparing for WebP conversion if needed
-        updateProgress(70);
-
-        // If compression made the file larger (which can happen with already optimized images),
-        // use the original instead
-        if (compressedFile.size > imageFile.size) {
-            compressedFile = imageFile;
+        updateProgress(70);        // If compression made the file larger (which can happen with already optimized images),
+        // use the processed file instead
+        if (compressedFile.size > processedFile.size) {
+            compressedFile = processedFile;
         }
 
         let finalFile = compressedFile;
@@ -268,6 +326,101 @@ const convertToWebP = async (file: File, quality: number): Promise<Blob> => {
         });
     } catch (error) {
         console.error('Error in WebP conversion:', error);
+        throw error;
+    }
+};
+
+/**
+ * Calculate optimal dimensions preserving aspect ratio
+ * For square images: exactly 200x200px
+ * For rectangles: smaller dimension becomes 200px, larger scales proportionally
+ * 
+ * @param {number} originalWidth - Original image width
+ * @param {number} originalHeight - Original image height  
+ * @param {number} _maxDimension - Maximum allowed dimension (unused, kept for compatibility)
+ * @returns {object} - Calculated width and height maintaining aspect ratio
+ */
+const calculateSmartDimensions = (
+    originalWidth: number,
+    originalHeight: number,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _maxDimension: number
+): { width: number; height: number } => {
+    const aspectRatio = originalWidth / originalHeight;
+    const isSquare = Math.abs(aspectRatio - 1) < 0.1; // Consider "almost square" as square
+    
+    // For square images: exactly 200x200
+    if (isSquare) {
+        return { width: 200, height: 200 };
+    }
+    
+    // For rectangles: make the smaller dimension exactly 200px, scale the larger proportionally
+    const targetMinDimension = 200;
+    
+    if (originalWidth > originalHeight) {
+        // Landscape: height becomes 200px, width scales up proportionally
+        const newHeight = targetMinDimension;
+        const newWidth = Math.round(newHeight * aspectRatio);
+        return { width: newWidth, height: newHeight };
+    } else {
+        // Portrait: width becomes 200px, height scales up proportionally  
+        const newWidth = targetMinDimension;
+        const newHeight = Math.round(newWidth / aspectRatio);
+        return { width: newWidth, height: newHeight };
+    }
+};
+
+/**
+ * Smart resize image using canvas to preserve aspect ratio and improve quality
+ * 
+ * @param {File} file - The image file to resize
+ * @param {number} targetWidth - Target width
+ * @param {number} targetHeight - Target height
+ * @param {number} quality - Image quality for output
+ * @returns {Promise<File>} - Resized image file
+ */
+const smartResizeImage = async (
+    file: File,
+    targetWidth: number,
+    targetHeight: number,
+    quality: number
+): Promise<File> => {
+    try {
+        // Create image bitmap from file
+        const bitmap = await createImageBitmap(file);
+        
+        // Create canvas with target dimensions
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas 2D context not available');
+        
+        // Enable image smoothing for better quality
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        // Draw resized image
+        ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+        
+        // Convert to blob with high quality
+        return new Promise((resolve, reject) => {
+            canvas.toBlob(blob => {
+                if (blob) {
+                    const resizedFile = new File(
+                        [blob],
+                        file.name,
+                        { type: file.type || 'image/jpeg' }
+                    );
+                    resolve(resizedFile);
+                } else {
+                    reject(new Error('Failed to resize image'));
+                }
+            }, file.type || 'image/jpeg', quality);
+        });
+    } catch (error) {
+        console.error('Error in smart resize:', error);
         throw error;
     }
 };
