@@ -143,13 +143,11 @@ export const optimizeImage = async (
                     options.maxSmartDimension || 400
                 );
                 
-                console.log(`Smart resizing: ${originalWidth}x${originalHeight} → ${smartDimensions.width}x${smartDimensions.height}`);
-                  try {
+                console.log(`Smart resizing: ${originalWidth}x${originalHeight} → ${smartDimensions.width}x${smartDimensions.height}`);                try {
                     processedFile = await smartResizeImage(
                         imageFile,
                         smartDimensions.width,
-                        smartDimensions.height,
-                        1.0 // Use maximum quality to preserve original quality
+                        smartDimensions.height
                     );
                     updateProgress(14);
                     
@@ -183,13 +181,17 @@ export const optimizeImage = async (
                 const mappedProgress = 15 + (progress * 0.5);
                 updateProgress(mappedProgress);
             }
-        };
-
-        // Determine if we should use WebP
-        const useWebP = options.useWebP && isWebPSupported();
-
-        // Compress the image (use processed file which may be resized)
-        let compressedFile = await imageCompression(processedFile, compressionOptions);
+        };        // Determine if we should use WebP (disabled for resized images to preserve quality)
+        const useWebP = options.useWebP && isWebPSupported() && processedFile === imageFile;        // Compress the image (skip compression for resized images to preserve quality)
+        let compressedFile = processedFile;
+        
+        if (processedFile === imageFile) {
+            // Only compress if we haven't resized (original image)
+            compressedFile = await imageCompression(processedFile, compressionOptions);
+        } else {
+            // For resized images, skip compression to preserve quality
+            console.log('Skipping compression for resized image to preserve quality');
+        }
 
         // Update progress - compression done, preparing for WebP conversion if needed
         updateProgress(70);        // If compression made the file larger (which can happen with already optimized images),
@@ -369,19 +371,17 @@ const calculateSmartDimensions = (
 };
 
 /**
- * Smart resize image using canvas to preserve aspect ratio and improve quality
+ * Smart resize image using canvas to preserve aspect ratio and maintain maximum quality
  * 
  * @param {File} file - The image file to resize
  * @param {number} targetWidth - Target width
  * @param {number} targetHeight - Target height
- * @param {number} quality - Image quality for output
- * @returns {Promise<File>} - Resized image file
+ * @returns {Promise<File>} - Resized image file with maximum quality
  */
 const smartResizeImage = async (
     file: File,
     targetWidth: number,
-    targetHeight: number,
-    quality: number
+    targetHeight: number
 ): Promise<File> => {
     try {
         // Create image bitmap from file
@@ -401,8 +401,7 @@ const smartResizeImage = async (
         
         // Draw resized image
         ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
-        
-        // Convert to blob with high quality
+          // Convert to blob with maximum quality and original format
         return new Promise((resolve, reject) => {
             canvas.toBlob(blob => {
                 if (blob) {
@@ -415,7 +414,7 @@ const smartResizeImage = async (
                 } else {
                     reject(new Error('Failed to resize image'));
                 }
-            }, file.type || 'image/jpeg', quality);
+            }, file.type || 'image/jpeg', 1.0); // Force maximum quality (1.0)
         });
     } catch (error) {
         console.error('Error in smart resize:', error);
