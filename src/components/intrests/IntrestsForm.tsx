@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/utils/supabase'
 import { Database } from '@/types/database'
 import { v4 as uuidv4 } from 'uuid'
@@ -79,7 +79,7 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
     }
   }, [product])
   // Handle tag changes - always allow tag changes regardless of locking
-  const handleTagChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTagChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
 
     // Remove # symbol and commas if user types them
@@ -90,59 +90,59 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
 
     // Store the tag value - we'll add the # only during submission      // Don't add # here to prevent duplicates
     setTag(tagWithoutCommas)
-  },
+  }, [])
 
-    handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files[0]) {
-        const file = e.target.files[0]
-        // Only allow image changes if fields are not locked
-        if (!lockedFields.image) {
-          try {
-            // Create preview with original file for immediate feedback
-            const reader = new FileReader()
-            reader.onload = () => {
-              setImagePreview(reader.result as string)
-            }
-            reader.readAsDataURL(file)
-
-            // Reset progress and set optimizing state
-            setImageProgress(0)
-            setIsOptimizingImage(true)
-
-            // Optimize the image in the background with progress tracking
-            const optimizedFile = await optimizeImage(file, {
-              maxSizeMB: 0.8,
-              maxWidthOrHeight: 1200,
-              quality: 0.75,
-              onProgress: (progress) => {
-                // Ensure progress is an integer for proper style generation
-                setImageProgress(Math.round(progress))
-              }
-            })
-
-            // Set progress to 100% when complete
-            setImageProgress(100)
-            setImage(optimizedFile)
-
-            // Log the optimization results
-            console.log(`Original size: ${(file.size / 1024).toFixed(2)} KB`)
-            console.log(`Optimized size: ${(optimizedFile.size / 1024).toFixed(2)} KB`)
-            console.log(`Reduction: ${((1 - optimizedFile.size / file.size) * 100).toFixed(1)}%`)
-          } catch (err) {
-            console.error('Error optimizing image:', err)
-            // Fallback to original file if optimization fails
-            setImage(file)
-          } finally {
-            // Wait a moment to show the 100% progress before hiding
-            setTimeout(() => {
-              setIsOptimizingImage(false)
-            }, 500)
+  const handleImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0]
+      // Only allow image changes if fields are not locked
+      if (!lockedFields.image) {
+        try {
+          // Create preview with original file for immediate feedback
+          const reader = new FileReader()
+          reader.onload = () => {
+            setImagePreview(reader.result as string)
           }
+          reader.readAsDataURL(file)
+
+          // Reset progress and set optimizing state
+          setImageProgress(0)
+          setIsOptimizingImage(true)
+
+          // Optimize the image in the background with progress tracking
+          const optimizedFile = await optimizeImage(file, {
+            maxSizeMB: 0.8,
+            maxWidthOrHeight: 1200,
+            quality: 0.75,
+            onProgress: (progress) => {
+              // Ensure progress is an integer for proper style generation
+              setImageProgress(Math.round(progress))
+            }
+          })
+
+          // Set progress to 100% when complete
+          setImageProgress(100)
+          setImage(optimizedFile)
+
+          // Log the optimization results
+          console.log(`Original size: ${(file.size / 1024).toFixed(2)} KB`)
+          console.log(`Optimized size: ${(optimizedFile.size / 1024).toFixed(2)} KB`)
+          console.log(`Reduction: ${((1 - optimizedFile.size / file.size) * 100).toFixed(1)}%`)
+        } catch (err) {
+          console.error('Error optimizing image:', err)
+          // Fallback to original file if optimization fails
+          setImage(file)
+        } finally {
+          // Wait a moment to show the 100% progress before hiding
+          setTimeout(() => {
+            setIsOptimizingImage(false)
+          }, 500)
         }
       }
     }
+  }, [lockedFields.image])
 
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newTitle = e.target.value
     setTitle(newTitle)
 
@@ -150,7 +150,7 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
     if (productFromDb) {
       resetAutofilledData()
     }
-  }
+  }, [productFromDb])
   const resetAutofilledData = () => {
     // Don't clear fields when editing an existing product
     if (isEditing) return
@@ -492,7 +492,8 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
         tag: finalTag,
         image_url: imageUrl,
         display_section: section,
-        created_at: isoDateString // Explicitly set to current date/time using date-fns
+        // Only set created_at for new products, preserve original date for edits
+        created_at: isEditing ? undefined : isoDateString
       }
 
       if (isEditing && product?.id) {
@@ -604,9 +605,9 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
             id="description"
             value={description}
             ref={descriptionInputRef}
-            onChange={(e) => {
+            onChange={useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
               setDescription(e.target.value)
-            }}
+            }, [])}
             rows={3}
             className="w-full text-black px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-[#3d82f7] focus:border-[#3d82f7]"
             placeholder="Опишите ваш интерес"
@@ -647,7 +648,8 @@ export default function ProductForm({ userId, product, section, onComplete, onCa
           <TagSuggestionBox
             inputValue={tagWithoutHash}
             onSelectTag={handleTagSelect}
-            onFindMatches={handleTagSuggestionsFound} />
+            onFindMatches={handleTagSuggestionsFound}
+          />
         </div>
 
         {/* Image section */}

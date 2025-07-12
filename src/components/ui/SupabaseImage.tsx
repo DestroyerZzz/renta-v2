@@ -34,7 +34,6 @@ export default function SupabaseImage({
   loading: imageLoading
 }: SupabaseImageProps) {
   const [error, setError] = useState(false)
-  const [loading, setLoading] = useState(true)
   const isDataUrl = src?.startsWith('data:')
   const isSupabaseUrl = src?.includes('supabase')
 
@@ -47,18 +46,12 @@ export default function SupabaseImage({
   // Handle component mounting and cleanup
   useEffect(() => {
     setError(false)
-    setLoading(true)
-
-    // For data URLs, set loading to false immediately
-    if (isDataUrl) {
-      setLoading(false)
-    }
 
     // Reset error state when src changes
     return () => {
       setError(false)
     }
-  }, [src, isDataUrl])
+  }, [src])
 
   // If image fails to load or there's no src, show the fallback
   if (error || !src) {
@@ -70,10 +63,10 @@ export default function SupabaseImage({
   }
 
   const handleLoad = () => {
-    setLoading(false)
+    // Image loaded successfully
   }
 
-  const imageClasses = `${className} ${loading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300 ${fill ? 'object-cover w-full h-full' : ''}`
+  const imageClasses = `${className} opacity-100 ${fill ? 'object-cover w-full h-full' : ''}`
   const loadingAttribute = imageLoading || (priority ? "eager" : "lazy")
 
   if (fill) {

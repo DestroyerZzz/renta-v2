@@ -86,6 +86,7 @@ export default function ProfileHeader({
     const checkOwnership = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser()
+
         if (user) {
           setIsOwner(user.id === userId)
         }
@@ -100,7 +101,7 @@ export default function ProfileHeader({
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        // Get user profile details
+        // Get user profile details FIRST and show immediately
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('full_name, avatar_url, cover_image_url, username')
@@ -123,28 +124,31 @@ export default function ProfileHeader({
           }
         }
 
-        // Get total interests count
-        const { count: interestsCount, error: interestsCountError } = await supabase
-          .from('products')
-          .select('id', { count: 'exact' })
-          .eq('user_id', userId)
+        // 🚀 Show profile IMMEDIATELY after basic data loads
+        setIsLoading(false);
 
-        if (!interestsCountError) {
-          setTotalInterests(interestsCount || 0)
+        // Fetch counts in parallel (non-blocking)
+        const [interestsResult, postsResult] = await Promise.all([
+          supabase
+            .from('products')
+            .select('id', { count: 'exact' })
+            .eq('user_id', userId),
+          supabase
+            .from('posts')
+            .select('id', { count: 'exact' })
+            .eq('user_id', userId)
+        ]);
+
+        if (!interestsResult.error) {
+          setTotalInterests(interestsResult.count || 0)
         }
 
-        // Get total posts count
-        const { count: postsCount, error: postsCountError } = await supabase
-          .from('posts')
-          .select('id', { count: 'exact' })
-          .eq('user_id', userId)
-
-        if (!postsCountError) {
-          setTotalPosts(postsCount || 0)
+        if (!postsResult.error) {
+          setTotalPosts(postsResult.count || 0)
         }
+
       } catch (error) {
         console.error('Error:', error);
-      } finally {
         setIsLoading(false);
       }
     };
@@ -179,15 +183,17 @@ export default function ProfileHeader({
               alt="Profile Cover"
               className="w-full h-full object-cover rounded-t-lg"
               priority={true}
-              quality={50}
+              quality={85}
               sizes="100vw"
+              loading="eager"
               fallback={
                 <div className="rounded-lg w-full h-full bg-gradient-to-r from-[#3d82f7] to-purple-600"></div>
               }
             />
           ) : (
             <div className="w-full h-full bg-gradient-to-r from-[#3d82f7] to-purple-600 rounded-lg"></div>
-          )}          {/* Centered avatar and username with text shadow */}
+          )}
+          {/* Centered avatar and username with text shadow */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <div className="relative w-[130px] h-[130px] rounded-full overflow-hidden bg-white p-1 shadow-lg mb-4">
               {avatarUrl ? (
@@ -196,10 +202,11 @@ export default function ProfileHeader({
                   alt="User Avatar"
                   className="w-full h-full rounded-full object-cover"
                   priority={true}
-                  quality={80}
+                  quality={90}
                   sizes="130px"
+                  loading="eager"
                   fallback={
-                    <div className="w-full h-full flex items-center justify-center bg-indigo-200 text-indigo-600 text-2xl font-bold rounded-full animate-pulse">
+                    <div className="w-full h-full flex items-center justify-center bg-indigo-200 text-indigo-600 text-2xl font-bold rounded-full">
                       {userName?.charAt(0)?.toUpperCase() || 'U'}
                     </div>
                   }
@@ -208,7 +215,9 @@ export default function ProfileHeader({
                 <div className="w-full h-full flex items-center justify-center bg-indigo-200 text-indigo-600 text-2xl font-bold rounded-full">
                   {userName?.charAt(0)?.toUpperCase() || 'U'}
                 </div>
-              )}            </div>            <h2 className="font-medium text-xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">{userName}</h2>
+              )}
+            </div>
+            <h2 className="font-medium text-xl text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)]">{userName}</h2>
             {!isOwner && <FollowButton targetUserId={userId} className="mt-2" />}
           </div>
         </div>
@@ -295,7 +304,8 @@ export default function ProfileHeader({
                   />
                 </>
               )}
-            </div>            {/* Only show search and filter in the interests page */}
+            </div>
+            {/* Only show search and filter in the interests page */}
             {isMainProfile && onTagFilterChange && (
               <div className="w-full md:w-64 flex items-center gap-3">
                 <div className="relative group flex-1">
