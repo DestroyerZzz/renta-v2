@@ -59,7 +59,7 @@ export default function FeedContent() {
             }
 
             // Then fetch the associated profiles
-            const userIds = products.map(product => product.user_id)
+            const userIds = products.map((product: Database['public']['Tables']['products']['Row']) => product.user_id)
             const { data: profiles, error: profilesError } = await supabase
                 .from('profiles')
                 .select('id, username, full_name, avatar_url')
@@ -70,8 +70,8 @@ export default function FeedContent() {
             }
 
             // Combine the products with their profiles
-            const productsWithProfiles = products.map(product => {
-                const profile = profiles.find(p => p.id === product.user_id) || null
+            const productsWithProfiles = products.map((product: Database['public']['Tables']['products']['Row']) => {
+                const profile = profiles?.find((p: { id: string; username: string | null; full_name: string | null; avatar_url: string | null }) => p.id === product.user_id) || null
                 return {
                     ...product,
                     profiles: profile
@@ -117,7 +117,7 @@ export default function FeedContent() {
             }
 
             // Then fetch the associated profiles
-            const userIds = moreProducts.map(product => product.user_id)
+            const userIds = moreProducts.map((product: Database['public']['Tables']['products']['Row']) => product.user_id)
             const { data: profiles, error: profilesError } = await supabase
                 .from('profiles')
                 .select('id, username, full_name, avatar_url')
@@ -128,8 +128,8 @@ export default function FeedContent() {
             }
 
             // Combine the products with their profiles
-            const productsWithProfiles = moreProducts.map(product => {
-                const profile = profiles.find(p => p.id === product.user_id) || null
+            const productsWithProfiles = moreProducts.map((product: Database['public']['Tables']['products']['Row']) => {
+                const profile = profiles?.find((p: { id: string; username: string | null; full_name: string | null; avatar_url: string | null }) => p.id === product.user_id) || null
                 return {
                     ...product,
                     profiles: profile

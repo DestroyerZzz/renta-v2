@@ -8,10 +8,9 @@ interface NotificationIndicatorProps {
     className?: string
 }
 
-// Create supabase client OUTSIDE the component so it's referentially stable
-const supabase = createClient()
-
 export default function NotificationIndicator({ className = '' }: NotificationIndicatorProps) {
+    // Create supabase client inside component but cache it
+    const supabase = createClient()
     const [unreadCount, setUnreadCount] = useState(0)
     const [isLoading, setIsLoading] = useState(true)
 

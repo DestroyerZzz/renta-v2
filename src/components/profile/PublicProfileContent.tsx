@@ -103,8 +103,8 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
 
         // Separate products into left and right displays
         if (products) {
-          const left = products.filter(product => product.display_section === 'left');
-          const right = products.filter(product => product.display_section === 'right');
+          const left = products.filter((product: Product) => product.display_section === 'left');
+          const right = products.filter((product: Product) => product.display_section === 'right');
           setLeftProducts(left);
           setRightProducts(right);
           setFilteredLeftProducts(left);
@@ -287,8 +287,8 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
         if (error) throw error
 
         if (products) {
-          const leftProds = products.filter(p => p.display_section === 'left')
-          const rightProds = products.filter(p => p.display_section === 'right')
+          const leftProds = products.filter((p: Product) => p.display_section === 'left')
+          const rightProds = products.filter((p: Product) => p.display_section === 'right')
           setLeftProducts(leftProds)
           setRightProducts(rightProds)
           setFilteredLeftProducts(leftProds)

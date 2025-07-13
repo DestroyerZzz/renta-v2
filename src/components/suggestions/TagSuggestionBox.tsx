@@ -23,7 +23,7 @@ const MIN_SEARCH_LENGTH = 2
 const TagSuggestionBox = ({ inputValue, onSelectTag, onFindMatches }: TagSuggestionBoxProps) => {
   const [tagSuggestions, setTagSuggestions] = useState<SuggestionTagData[]>([])
   const [isVisible, setIsVisible] = useState(false)
-  
+
   const lastSearchRef = useRef<string>('')
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -37,7 +37,7 @@ const TagSuggestionBox = ({ inputValue, onSelectTag, onFindMatches }: TagSuggest
           setIsVisible(false)
         }
       }
-      
+
       document.addEventListener('mousedown', handleClickOutside)
       return () => {
         document.removeEventListener('mousedown', handleClickOutside)
@@ -70,9 +70,9 @@ const TagSuggestionBox = ({ inputValue, onSelectTag, onFindMatches }: TagSuggest
         }
         return
       }
-      
+
       const normalizedInput = inputValue.trim().toLowerCase()
-      
+
       // Skip search if input hasn't changed since last search
       if (normalizedInput === lastSearchRef.current) {
         return
@@ -90,21 +90,22 @@ const TagSuggestionBox = ({ inputValue, onSelectTag, onFindMatches }: TagSuggest
 
       try {
         const supabase = createClient()
-        
+
         // Use case-insensitive search with ilike
         const { data, error } = await supabase
           .from('products')
           .select('tag')
           .not('tag', 'is', null)
           .ilike('tag', `%${normalizedInput}%`) // Use normalized input for consistent case-insensitive search
-        
+
         if (error) throw error
-        
+
         if (data && data.length > 0) {
           // Process the tags data - count occurrences and filter unique tags
           const tagsWithCount: Record<string, number> = {}
-          
-          data.forEach(item => {
+
+          const typedData = data as Array<{ tag: string | null }>
+          typedData.forEach((item) => {
             if (item.tag) {
               const tag = item.tag.toLowerCase() // normalize to lowercase for counting
               if (tagsWithCount[tag]) {
@@ -114,17 +115,17 @@ const TagSuggestionBox = ({ inputValue, onSelectTag, onFindMatches }: TagSuggest
               }
             }
           })
-          
+
           // Convert to array and sort by frequency
           const suggestions = Object.entries(tagsWithCount)
-            .map(([tag, count]) => ({ 
+            .map(([tag, count]) => ({
               // Use original case from data for display but ensure unique by lowercase key
-              tag: data.find(item => item.tag?.toLowerCase() === tag)?.tag || tag, 
-              count 
+              tag: typedData.find((item) => item.tag?.toLowerCase() === tag)?.tag || tag,
+              count
             }))
             .sort((a, b) => b.count - a.count) // Sort by most used first
             .slice(0, 5) // Limit to 5 suggestions
-          
+
           setTagSuggestions(suggestions)
           onFindMatches(suggestions, false)
           setIsVisible(suggestions.length > 0)
@@ -173,15 +174,14 @@ const TagSuggestionBox = ({ inputValue, onSelectTag, onFindMatches }: TagSuggest
   }
 
   return (
-    <div 
-      ref={dropdownRef} 
+    <div
+      ref={dropdownRef}
       className="absolute z-20 w-full mt-1.5 bg-white rounded-md shadow-md border border-gray-200 overflow-hidden"
     >
-      <ul className={`${
-        tagSuggestions.length > 3 ? 'max-h-48 overflow-y-auto' : ''
-      }`}>
+      <ul className={`${tagSuggestions.length > 3 ? 'max-h-48 overflow-y-auto' : ''
+        }`}>
         {tagSuggestions.map((suggestion, index) => (
-          <li 
+          <li
             key={index}
             onClick={() => {
               onSelectTag(suggestion.tag.startsWith('#') ? suggestion.tag.substring(1) : suggestion.tag)
@@ -197,10 +197,10 @@ const TagSuggestionBox = ({ inputValue, onSelectTag, onFindMatches }: TagSuggest
                   {suggestion.tag.startsWith('#') ? suggestion.tag.substring(1) : suggestion.tag}
                 </span>
               </div>
-              
+
               {/* Usage count badge with guaranteed visibility */}
               <div className="flex items-center bg-gray-100 text-gray-700 rounded-full flex-shrink-0">
-                <Repeat size={12} /> 
+                <Repeat size={12} />
                 <span className=" mr-8 px-2 py-1 text-xs text-[#3d82f7] font-semibold">{suggestion.count}</span>
               </div>
             </div>

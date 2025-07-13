@@ -110,11 +110,11 @@ const ProductSuggestionBox = (props: ProductSuggestionBoxProps) => {
         if (matches && matches.length > 0) {
           // Find exact match if exists
           const exactMatch = matches.find(
-            match => match.title?.trim().toLowerCase() === normalizedInput
+            (match: { title: string | null; description: string | null; tag: string | null; image_url: string | null }) => match.title?.trim().toLowerCase() === normalizedInput
           )
 
           // Process matches for dropdown
-          const suggestions = matches.map(match => ({
+          const suggestions = matches.map((match: { title: string | null; description: string | null; tag: string | null; image_url: string | null }) => ({
             title: match.title || '',
             description: match.description,
             tag: match.tag,

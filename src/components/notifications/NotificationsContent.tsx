@@ -112,7 +112,7 @@ export default function NotificationsContent() {
                         // Map interests to notifications
                         processedData = processedData.map((notification: Notification) => {
                             if (notification.type === 'interest' && notification.entity_id) {
-                                const interest = interests?.find(i => i.id === notification.entity_id)
+                                const interest = interests?.find((i: { id: string; title: string; display_section: string }) => i.id === notification.entity_id)
                                 return {
                                     ...notification,
                                     interest: interest || null,

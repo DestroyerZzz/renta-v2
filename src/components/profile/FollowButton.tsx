@@ -9,10 +9,9 @@ interface FollowButtonProps {
     className?: string
 }
 
-// Create supabase client OUTSIDE the component so it's referentially stable
-const supabase = createClient()
-
 export default function FollowButton({ targetUserId, className = '' }: FollowButtonProps) {
+    // Create supabase client inside component but cache it
+    const supabase = createClient()
     const [isFollowing, setIsFollowing] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
     const [currentUserId, setCurrentUserId] = useState<string | null>(null)
