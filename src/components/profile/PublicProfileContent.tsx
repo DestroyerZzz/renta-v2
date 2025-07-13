@@ -10,17 +10,9 @@ import { PlusCircle } from 'lucide-react'
 import Image from 'next/image'
 import ProfileHeader from './ProfileHeader'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import type { Database } from '@/types/database'
 
-interface Product {
-  id: string
-  created_at: string
-  user_id: string
-  title: string | null
-  image_url: string | null
-  description: string | null
-  tag: string | null
-  display_section: 'left' | 'right'
-}
+type Product = Database['public']['Tables']['products']['Row']
 
 interface PublicProfileContentProps {
   userId: string
@@ -103,8 +95,9 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
 
         // Separate products into left and right displays
         if (products) {
-          const left = products.filter((product: Product) => product.display_section === 'left');
-          const right = products.filter((product: Product) => product.display_section === 'right');
+          const typedProducts = products as Product[];
+          const left = typedProducts.filter((product) => product.display_section === 'left');
+          const right = typedProducts.filter((product) => product.display_section === 'right');
           setLeftProducts(left);
           setRightProducts(right);
           setFilteredLeftProducts(left);
@@ -287,8 +280,9 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
         if (error) throw error
 
         if (products) {
-          const leftProds = products.filter((p: Product) => p.display_section === 'left')
-          const rightProds = products.filter((p: Product) => p.display_section === 'right')
+          const typedProducts = products as Product[];
+          const leftProds = typedProducts.filter((p) => p.display_section === 'left')
+          const rightProds = typedProducts.filter((p) => p.display_section === 'right')
           setLeftProducts(leftProds)
           setRightProducts(rightProds)
           setFilteredLeftProducts(leftProds)
