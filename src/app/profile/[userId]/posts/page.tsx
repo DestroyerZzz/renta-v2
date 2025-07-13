@@ -133,7 +133,7 @@ export default function PostsPage() {
 
             if (error) throw error
 
-            setPosts(posts.filter(post => post.id !== postId))
+            setPosts(posts.filter((post: Post) => post.id !== postId))
         } catch (error) {
             console.error('Error deleting post:', error)
         }

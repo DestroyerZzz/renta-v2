@@ -127,12 +127,12 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
       const normalizedFilter = tagFilter.toLowerCase().trim();
       const isDefaultTagSearch = DEFAULT_TAG.toLowerCase().includes(normalizedFilter);
 
-      setFilteredLeftProducts(leftProducts.filter(p =>
+      setFilteredLeftProducts(leftProducts.filter((p: Product) =>
         p.tag?.toLowerCase().includes(normalizedFilter) ||
         (isDefaultTagSearch && (!p.tag || p.tag.trim() === ''))
       ));
 
-      setFilteredRightProducts(rightProducts.filter(p =>
+      setFilteredRightProducts(rightProducts.filter((p: Product) =>
         p.tag?.toLowerCase().includes(normalizedFilter) ||
         (isDefaultTagSearch && (!p.tag || p.tag.trim() === ''))
       ));
@@ -143,13 +143,13 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
     const normalizedFilter = tagFilter.toLowerCase().trim();
 
     // Filter products by tag - matching from the first letter
-    const filteredLeft = leftProducts.filter(product => {
+    const filteredLeft = leftProducts.filter((product: Product) => {
       if (!product.tag) return false;
       const normalizedProductTag = product.tag.toLowerCase();
       return normalizedProductTag.includes(normalizedFilter);
     });
 
-    const filteredRight = rightProducts.filter(product => {
+    const filteredRight = rightProducts.filter((product: Product) => {
       if (!product.tag) return false;
       const normalizedProductTag = product.tag.toLowerCase();
       return normalizedProductTag.includes(normalizedFilter);
@@ -233,8 +233,8 @@ export default function PublicProfileContent({ userId }: PublicProfileContentPro
 
   // Dashboard-specific handlers
   const handleDeleteProduct = (productId: string) => {
-    setLeftProducts(prev => prev.filter(p => p.id !== productId))
-    setRightProducts(prev => prev.filter(p => p.id !== productId))
+    setLeftProducts(prev => prev.filter((p: Product) => p.id !== productId))
+    setRightProducts(prev => prev.filter((p: Product) => p.id !== productId))
   }
   const handleEditProduct = (product: Product) => {
     // Just set the editing product, form will render inline

@@ -47,7 +47,7 @@ export default function TagGroupedInterests({
 
     // Filter tags if there's a tag filter active
     const tagsToDisplay = tagFilter ?
-        sortedTags.filter(tag => tag === tagFilter) :
+        sortedTags.filter((tag: string) => tag === tagFilter) :
         sortedTags;
 
     if (tagsToDisplay.length === 0) {
